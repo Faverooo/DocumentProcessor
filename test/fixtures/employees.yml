@@ -1,0 +1,26 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+mario_rossi:
+  name: Mario Rossi
+  email: mario.rossi@azienda.it
+  employee_code: EMP001
+
+giovanni_rossini:
+  name: Giovanni Rossini
+  email: giovanni.rossini@azienda.it
+  employee_code: EMP002
+
+mueller:
+  name: Klaus Müller
+  email: k.mueller@azienda.it
+  employee_code: EMP003
+
+eric_blanc:
+  name: Éric Blanc
+  email: eric.blanc@azienda.it
+  employee_code: EMP004
+
+luigi_bianchi:
+  name: Luigi Bianchi
+  email: luigi.bianchi@azienda.it
+  employee_code: EMP005

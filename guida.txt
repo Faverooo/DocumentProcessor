@@ -1,0 +1,50 @@
+Apri il terminale e scrivi:
+
+Bash
+# Crea il progetto usando SQLite (default) e saltando i test di default (useremo RSpec dopo se serve)
+rails new DocumentProcessor --database=sqlite3
+cd DocumentProcessor
+Aggiungi subito le gemme che ci servono nel Gemfile:
+
+Ruby
+# Apri il file Gemfile e aggiungi in fondo:
+gem 'combine_pdf'        # Per splittare i PDF
+gem 'aws-sdk-textract'   # Per l'OCR (anche se faremo stub/mock)
+gem 'aws-sdk-s3'         # Per lo storage
+gem 'faker'              # Per generare dati finti nel DB
+Poi esegui bundle install nel terminale.
+
+
+Dobbiamo creare due entità: gli Employee (i destinatari nel tuo DB aziendale) e i Documents (i file che carichi).
+
+Bash
+# Crea la tabella degli impiegati
+rails generate model Employee name:string email:string employee_code:string
+
+# Crea la tabella dei documenti processati
+rails generate model ProcessedDocument filename:string status:string recipient_name:string employee:references
+
+# Applica le modifiche al database (SQLite)
+rails db:migrate
+
+Invece di inserire i dati a mano, usiamo il file db/seeds.rb. Questo è il tuo "database fittizio".
+
+Ruby
+# db/seeds.rb
+puts "Svuotando il database..."
+Employee.destroy_all
+
+puts "Creando impiegati fittizi..."
+10.times do
+  Employee.create!(
+    name: Faker::Name.name,
+    email: Faker::Internet.email,
+    employee_code: "EMP#{rand(1000..9999)}"
+  )
+end
+
+# Aggiungiamo un utente specifico per i nostri test
+Employee.create!(name: "Mario Rossi", email: "mario.rossi@azienda.it", employee_code: "EMP0001")
+
+puts "Creati #{Employee.count} impiegati."
+Esegui rails db:seed per riempire il DB.
