@@ -1,51 +1,28 @@
 <div class="container mt-5">
   <div class="row">
     <div class="col-md-10 offset-md-1">
-      <h1 class="mb-4">🧪 Test Servizi DocumentProcessor</h1>
+      <h1 class="mb-4">Pipeline Asincrona DocumentProcessor</h1>
 
-      <div class="row">
-        <!-- Test Split -->
-        <div class="col-md-6 mb-4">
-          <div class="card">
-            <div class="card-header bg-primary text-white">
-              <h5 class="mb-0">🔪 Test Split PDF</h5>
-            </div>
-            <div class="card-body">
-              <p class="text-muted">Analizza un PDF multi-documento e lo divide in mini-PDF per ogni documento singolo.</p>
-              
-              <form id="splitForm" enctype="multipart/form-data">
-                <div class="mb-3">
-                  <label for="splitFile" class="form-label">Seleziona file PDF</label>
-                  <input type="file" class="form-control" id="splitFile" name="pdf" accept=".pdf" required>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">Testa Split</button>
-              </form>
-
-              <div id="splitResults" class="mt-4"></div>
-            </div>
-          </div>
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Upload unico: split + processamento automatico</h5>
         </div>
+        <div class="card-body">
+          <p class="text-muted">
+            Carica un PDF multi-documento. Il backend avvia lo split asincrono, poi processa ogni mini-PDF in job separati,
+            inviando notifiche in tempo reale via WebSocket.
+          </p>
 
-        <!-- Test Recipient -->
-        <div class="col-md-6 mb-4">
-          <div class="card">
-            <div class="card-header bg-success text-white">
-              <h5 class="mb-0">🤖 Test Estrazione Destinatari</h5>
+          <form id="pipelineForm" enctype="multipart/form-data">
+            <div class="mb-3">
+              <label for="pipelineFile" class="form-label">Seleziona file PDF</label>
+              <input type="file" class="form-control" id="pipelineFile" name="pdf" accept=".pdf" required>
             </div>
-            <div class="card-body">
-              <p class="text-muted">Estrae il testo con OCR, individua i nomi via LLM e li matcha con il database dipendenti.</p>
-              
-              <form id="recipientForm" enctype="multipart/form-data">
-                <div class="mb-3">
-                  <label for="recipientFile" class="form-label">Seleziona file PDF</label>
-                  <input type="file" class="form-control" id="recipientFile" name="pdf" accept=".pdf" required>
-                </div>
-                <button type="submit" class="btn btn-success w-100">Testa Estrazione</button>
-              </form>
+            <button type="submit" class="btn btn-primary w-100">Avvia Pipeline</button>
+          </form>
 
-              <div id="recipientResults" class="mt-4"></div>
-            </div>
-          </div>
+          <div id="pipelineResults" class="mt-4"></div>
+          <div id="documentsList" class="mt-3"></div>
         </div>
       </div>
     </div>
@@ -53,63 +30,64 @@
 </div>
 
 <style>
-  .loading {
-    display: none;
-    margin-top: 20px;
-  }
-  
-  .loading.show {
-    display: block;
-  }
-  
   .result-section {
     margin-top: 20px;
     padding: 15px;
     border-radius: 5px;
   }
-  
+
   .result-success {
     background-color: #d4edda;
     border: 1px solid #c3e6cb;
     color: #155724;
   }
-  
+
+  .result-info {
+    background-color: #e7f3ff;
+    border: 1px solid #b9ddff;
+    color: #084b83;
+  }
+
   .result-error {
     background-color: #f8d7da;
     border: 1px solid #f5c6cb;
     color: #721c24;
   }
-  
-  .ocr-text {
-    background-color: #f5f5f5;
+
+  .doc-row {
+    border: 1px solid #dcdcdc;
+    border-radius: 6px;
     padding: 10px;
-    border-radius: 4px;
-    max-height: 300px;
-    overflow-y: auto;
-    font-size: 12px;
-    font-family: monospace;
+    margin-bottom: 10px;
+    background: #fff;
   }
-  
-  .match-info {
-    background-color: #e7f3ff;
-    border-left: 4px solid #2196F3;
-    padding: 10px;
-    margin-top: 10px;
+
+  .doc-row strong {
+    display: block;
   }
 </style>
 
 <script>
-  // Test Split
-  document.getElementById('splitForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
+  const form = document.getElementById('pipelineForm');
+  const fileInput = document.getElementById('pipelineFile');
+  const resultsDiv = document.getElementById('pipelineResults');
+  const documentsListDiv = document.getElementById('documentsList');
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const selectedFile = fileInput.files[0];
+    if (!selectedFile) {
+      resultsDiv.innerHTML = '<div class="result-section result-error"><strong>Errore:</strong> seleziona un PDF.</div>';
+      return;
+    }
+
     const formData = new FormData();
-    const fileInput = document.getElementById('splitFile');
-    formData.append('pdf', fileInput.files[0]);
-    
-    const resultsDiv = document.getElementById('splitResults');
-    resultsDiv.innerHTML = '<div class="loading show"><span class="spinner-border spinner-border-sm me-2"></span>Caricamento in corso...</div>';
-    
+    formData.append('pdf', selectedFile);
+
+    resultsDiv.innerHTML = '<div class="result-section result-info">Upload in corso...</div>';
+    documentsListDiv.innerHTML = '';
+
     try {
       const response = await fetch('<%= test_split_documents_path %>', {
         method: 'POST',
@@ -118,125 +96,82 @@
           'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content
         }
       });
-      
+
       const data = await response.json();
-      
-      if (data.status === 'queued') {
-        resultsDiv.innerHTML = '<div class="result-section"><span class="spinner-border spinner-border-sm me-2"></span>Elaborazione in corso...</div>';
-        listenForSplitResult(data.job_id, resultsDiv);
-      } else {
-        resultsDiv.innerHTML = `<div class="result-section result-error"><strong>❌ Errore:</strong> ${data.message}</div>`;
+
+      if (data.status !== 'queued') {
+        resultsDiv.innerHTML = `<div class="result-section result-error"><strong>Errore:</strong> ${escapeHtml(data.message || 'richiesta non valida')}</div>`;
+        return;
       }
+
+      resultsDiv.innerHTML = '<div class="result-section result-info">Pipeline avviata. Attendo evento di split...</div>';
+      listenToPipelineEvents(data.job_id);
     } catch (error) {
-      resultsDiv.innerHTML = `<div class="result-section result-error"><strong>❌ Errore:</strong> ${error.message}</div>`;
+      resultsDiv.innerHTML = `<div class="result-section result-error"><strong>Errore:</strong> ${escapeHtml(error.message)}</div>`;
     }
   });
 
-  // Test Recipient
-  document.getElementById('recipientForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const formData = new FormData();
-    const fileInput = document.getElementById('recipientFile');
-    formData.append('pdf', fileInput.files[0]);
-    
-    const resultsDiv = document.getElementById('recipientResults');
-    resultsDiv.innerHTML = '<div class="loading show"><span class="spinner-border spinner-border-sm me-2"></span>Caricamento in corso...</div>';
-    
-    try {
-      const response = await fetch('<%= test_recipient_documents_path %>', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content
+  function listenToPipelineEvents(jobId) {
+    subscribeToJob(jobId, (message, unsubscribe) => {
+      if (message.event === 'split_completed') {
+        if (message.status === 'error') {
+          resultsDiv.innerHTML = `<div class="result-section result-error"><strong>Split fallito:</strong> ${escapeHtml(message.message || 'errore sconosciuto')}</div>`;
+          unsubscribe();
+          return;
         }
-      });
-      
-      const data = await response.json();
-      
-      if (data.status === 'queued') {
-        resultsDiv.innerHTML = '<div class="result-section"><span class="spinner-border spinner-border-sm me-2"></span>Elaborazione in corso...</div>';
-        listenForRecipientResult(data.job_id, resultsDiv);
-      } else {
-        resultsDiv.innerHTML = `<div class="result-section result-error"><strong>❌ Errore:</strong> ${data.message}</div>`;
-      }
-    } catch (error) {
-      resultsDiv.innerHTML = `<div class="result-section result-error"><strong>❌ Errore:</strong> ${error.message}</div>`;
-    }
-  });
 
-  // Ascolta i risultati del split via WebSocket
-  function listenForSplitResult(jobId, resultsDiv) {
-    subscribeToJob(jobId, (data, unsubscribe) => {
-      if (data.status === 'success') {
         resultsDiv.innerHTML = `
           <div class="result-section result-success">
-            <h6>✅ Split completato</h6>
-            <p><strong>Pagine originali:</strong> ${data.original_pages}</p>
-            <p><strong>Mini-PDF creati:</strong> ${data.mini_pdfs_count}</p>
-            <details>
-              <summary>Mostra elenco file</summary>
-              <ul style="margin-top: 10px;">
-                ${data.mini_pdfs.map(pdf => `<li><code>${pdf}</code></li>`).join('')}
-              </ul>
-            </details>
+            <strong>Split completato</strong>
+            <div>Pagine originali: ${message.original_pages}</div>
+            <div>Documenti generati: ${message.mini_pdfs_count}</div>
+          </div>
+          <div class="result-section result-info">Processamento destinatari in corso...</div>
+        `;
+        return;
+      }
+
+      if (message.event === 'document_processed') {
+        appendDocumentRow(message);
+        return;
+      }
+
+      if (message.event === 'processing_completed') {
+        resultsDiv.innerHTML += `
+          <div class="result-section result-success">
+            <strong>Pipeline terminata</strong>
+            <div>Documenti completati: ${message.processed_documents}/${message.total_documents}</div>
           </div>
         `;
         unsubscribe();
-      } else if (data.status === 'error') {
-        resultsDiv.innerHTML = `<div class="result-section result-error"><strong>❌ Errore:</strong> ${data.message}</div>`;
-        unsubscribe();
       }
-    }, (message) => {
-      resultsDiv.innerHTML = `<div class="result-section result-error"><strong>❌ Errore WebSocket:</strong> ${message}</div>`;
+    }, (errorMessage) => {
+      resultsDiv.innerHTML = `<div class="result-section result-error"><strong>Errore WebSocket:</strong> ${escapeHtml(errorMessage)}</div>`;
     });
   }
 
-  // Ascolta i risultati dell'estrazione via WebSocket
-  function listenForRecipientResult(jobId, resultsDiv) {
-    subscribeToJob(jobId, (data, unsubscribe) => {
-      if (data.status === 'success') {
-        const matchHtml = data.matched_recipient 
-          ? `<div class="match-info">
-              <strong>✅ Destinatario trovato:</strong><br>
-              Nome: ${data.matched_recipient.name}<br>
-              Email: ${data.matched_recipient.email}<br>
-              Codice: ${data.matched_recipient.employee_code}
-            </div>`
-          : data.fallback_text
-            ? `<div class="match-info" style="border-left-color: #ff9800;">
-                <strong>⚠️ Nessun match nel DB</strong><br>
-                Testo grezzo: ${data.fallback_text.substring(0, 100)}...
-              </div>`
-            : '<div class="match-info">⚠️ Nessun destinatario estratto</div>';
-        
-        resultsDiv.innerHTML = `
-          <div class="result-section result-success">
-            <h6>✅ Estrazione completata</h6>
-            
-            <details>
-              <summary><strong>📋 Nomi estratti dal LLM (${data.extracted_names.length})</strong></summary>
-              <ul style="margin-top: 10px;">
-                ${data.extracted_names.map(name => `<li>${name}</li>`).join('') || '<li><em>Nessun nome estratto</em></li>'}
-              </ul>
-            </details>
-            
-            <details style="margin-top: 10px;">
-              <summary><strong>📄 Testo OCR (preview)</strong></summary>
-              <div class="ocr-text">${escapeHtml(data.ocr_text.substring(0, 500))}...</div>
-            </details>
-            
-            ${matchHtml}
-          </div>
-        `;
-        unsubscribe();
-      } else if (data.status === 'error') {
-        resultsDiv.innerHTML = `<div class="result-section result-error"><strong>❌ Errore:</strong> ${data.message}</div>`;
-        unsubscribe();
-      }
-    }, (message) => {
-      resultsDiv.innerHTML = `<div class="result-section result-error"><strong>❌ Errore WebSocket:</strong> ${message}</div>`;
-    });
+  function appendDocumentRow(message) {
+    const statusLabel = message.status === 'success' ? 'OK' : 'ERRORE';
+    const destinationText = message.matched_recipient
+      ? `${message.matched_recipient.name} (${message.matched_recipient.employee_code})`
+      : (message.fallback_text ? `Nessun match DB. Fallback: ${message.fallback_text.substring(0, 120)}` : 'Nessun destinatario estratto');
+
+    const body = message.status === 'success'
+      ? `
+        <div>Destinatario: ${escapeHtml(destinationText)}</div>
+        <div>Nomi estratti: ${(message.extracted_names || []).map(escapeHtml).join(', ') || 'nessuno'}</div>
+      `
+      : `<div>Messaggio: ${escapeHtml(message.message || 'errore sconosciuto')}</div>`;
+
+    const row = document.createElement('div');
+    row.className = 'doc-row';
+    row.innerHTML = `
+      <strong>[${statusLabel}] Documento ${message.document_index || '?'}${message.total_documents ? `/${message.total_documents}` : ''}</strong>
+      <div>File: ${escapeHtml(message.filename || 'N/A')}</div>
+      ${body}
+    `;
+
+    documentsListDiv.prepend(row);
   }
 
   function subscribeToJob(jobId, onData, onError) {
@@ -257,6 +192,7 @@
 
     socket.addEventListener('message', (event) => {
       const payload = JSON.parse(event.data);
+
       if (payload.type === 'welcome' || payload.type === 'ping' || payload.type === 'confirm_subscription') {
         return;
       }
@@ -273,13 +209,13 @@
     });
 
     socket.addEventListener('error', () => {
-      onError('Connessione non disponibile');
+      onError('Connessione WebSocket non disponibile');
     });
   }
 
-  function escapeHtml(text) {
+  function escapeHtml(value) {
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = value || '';
     return div.innerHTML;
   }
 </script>

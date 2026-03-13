@@ -7,11 +7,17 @@ class DocumentsController < ApplicationController
   def test_split
     with_temp_pdf do |temp_path|
       job_id = SecureRandom.uuid
+      ProcessingRun.create!(
+        job_id: job_id,
+        status: "queued",
+        original_filename: params[:pdf].original_filename
+      )
+
       PdfSplitJob.perform_later(temp_path, job_id)
       
       render json: {
         status: "queued",
-        message: "PDF split job enqueued",
+        message: "Pipeline avviata: split in corso, processamento documenti automatico",
         job_id: job_id
       }
     end
@@ -21,7 +27,20 @@ class DocumentsController < ApplicationController
   def test_recipient
     with_temp_pdf do |temp_path|
       job_id = SecureRandom.uuid
-      RecipientExtractionJob.perform_later(temp_path, job_id)
+      run = ProcessingRun.create!(
+        job_id: job_id,
+        status: "processing",
+        original_filename: params[:pdf].original_filename,
+        total_documents: 1,
+        started_at: Time.current
+      )
+      item = run.processing_items.create!(
+        sequence: 1,
+        filename: File.basename(temp_path),
+        status: "queued"
+      )
+
+      RecipientExtractionJob.perform_later(temp_path, job_id, item.id)
       
       render json: {
         status: "queued",
