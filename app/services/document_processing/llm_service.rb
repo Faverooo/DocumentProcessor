@@ -77,20 +77,27 @@ module DocumentProcessing
       <<~PROMPT
         Sei un sistema di estrazione strutturata.
         Devi identificare solo i destinatari principali del documento.
+        Inoltre devi estrarre, se presenti e affidabili, i metadati principali del documento: data, azienda, reparto.
         Non includere firme, mittenti, referenti interni, persone citate nel corpo testo o menzioni secondarie.
+        Se un dato non e certo, valorizzalo a null.
         Rispondi sempre e solo con JSON valido.
       PROMPT
     end
 
     def recipient_extraction_user_prompt(text)
       <<~PROMPT
-        Estrai SOLO i destinatari principali del documento.
+        Estrai i destinatari principali e i metadati principali del documento.
 
         Formato output obbligatorio:
-        {"recipients":[{"name":"Nome Cognome"}]}
+        {"recipients":[{"name":"Nome Cognome"}],"document":{"date":"YYYY-MM-DD or null","company":"Nome Azienda or null","department":"Nome Reparto or null"}}
 
-        Se non trovi destinatari certi:
-        {"recipients":[]}
+        Regole:
+        - recipients contiene solo destinatari principali.
+        - document.date deve essere in formato ISO YYYY-MM-DD quando possibile, altrimenti null.
+        - Se company o department non sono chiari, usa null.
+
+        Se non trovi destinatari certi, lascia recipients vuoto ma compila comunque document dove possibile:
+        {"recipients":[],"document":{"date":null,"company":null,"department":null}}
 
         Testo OCR documento:
         ---

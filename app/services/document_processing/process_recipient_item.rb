@@ -12,7 +12,9 @@ module DocumentProcessing
       mark_item_in_progress(item)
 
       full_text = container.ocr_service.full_ocr(file_path)
-      recipient_names = container.recipient_extractor.extract(full_text)
+      extraction = container.recipient_extractor.extract(full_text)
+      recipient_names = extraction[:recipients]
+      extracted_document_data = extraction[:metadata]
       resolution = container.recipient_resolver.resolve(recipient_names:, raw_text: full_text)
 
       update_item_success(item, resolution)
@@ -24,6 +26,7 @@ module DocumentProcessing
         filename: File.basename(file_path),
         ocr_text: full_text,
         extracted_names: recipient_names,
+        extracted_document_data: extracted_document_data,
         matched_recipient: format_employee(resolution.employee),
         fallback_text: resolution.unmatched? ? resolution.fallback_text : nil
       )

@@ -13,22 +13,29 @@ class DocumentRecipientExtractorService
     @llm_service = llm_service || DocumentProcessing::LlmService.new(bedrock_client: bedrock_client)
   end
 
-  # Estrae destinatari dal testo OCR
-  # Ritorna: ["Mario Rossi", "Anna Bianchi"] oppure []
+  # Estrae destinatari e metadati dal testo OCR
+  # Ritorna:
+  # {
+  #   recipients: ["Mario Rossi", "Anna Bianchi"],
+  #   metadata: { date: "2026-03-16", company: "ACME", department: "HR" }
+  # }
   def extract(text)
-    return [] if text.to_s.strip.blank?
+    return empty_extraction if text.to_s.strip.blank?
 
     parsed = ask_llm_for_recipients(text)  # Chiama Nova Lite via Bedrock
-    
+
     # Estrai nomi e normalizza
     recipients = Array(parsed["recipients"]).filter_map do |entry|
       normalize_name(entry["name"] || entry[:name])
     end
 
-    recipients.uniq  # Rimuovi duplicati
+    {
+      recipients: recipients.uniq, # Rimuovi duplicati
+      metadata: extract_metadata(parsed)
+    }
   rescue StandardError => error
     Rails.logger.error("Errore estrazione destinatari LLM: #{error.message}")
-    []  # Fallback: ritorna lista vuota
+    empty_extraction
   end
 
   private
@@ -46,5 +53,46 @@ class DocumentRecipientExtractorService
     return nil if cleaned.blank? || cleaned.length < 3
 
     cleaned
+  end
+
+  def extract_metadata(parsed)
+    document_data = parsed["document"] || parsed[:document] || {}
+
+    {
+      date: normalize_field(
+        document_data["date"] ||
+        document_data[:date] ||
+        parsed["date"] ||
+        parsed[:date]
+      ),
+      company: normalize_field(
+        document_data["company"] ||
+        document_data[:company] ||
+        parsed["company"] ||
+        parsed[:company]
+      ),
+      department: normalize_field(
+        document_data["department"] ||
+        document_data[:department] ||
+        parsed["department"] ||
+        parsed[:department]
+      )
+    }
+  end
+
+  def normalize_field(value)
+    cleaned = value.to_s.gsub(/\s+/, " ").strip
+    cleaned.presence
+  end
+
+  def empty_extraction
+    {
+      recipients: [],
+      metadata: {
+        date: nil,
+        company: nil,
+        department: nil
+      }
+    }
   end
 end
