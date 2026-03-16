@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_04_084442) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_13_120002) do
   create_table "employees", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email"
@@ -29,5 +29,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_04_084442) do
     t.index ["employee_id"], name: "index_processed_documents_on_employee_id"
   end
 
+  create_table "processing_items", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error_message"
+    t.string "filename", null: false
+    t.integer "matched_employee_id"
+    t.integer "processing_run_id", null: false
+    t.string "recipient_name"
+    t.integer "sequence", null: false
+    t.string "status", default: "queued", null: false
+    t.datetime "updated_at", null: false
+    t.index ["matched_employee_id"], name: "index_processing_items_on_matched_employee_id"
+    t.index ["processing_run_id", "sequence"], name: "index_processing_items_on_processing_run_id_and_sequence", unique: true
+    t.index ["processing_run_id"], name: "index_processing_items_on_processing_run_id"
+    t.index ["status"], name: "index_processing_items_on_status"
+  end
+
+  create_table "processing_runs", force: :cascade do |t|
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.text "error_message"
+    t.string "job_id", null: false
+    t.string "original_filename"
+    t.integer "processed_documents", default: 0, null: false
+    t.datetime "started_at"
+    t.string "status", default: "queued", null: false
+    t.integer "total_documents", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["job_id"], name: "index_processing_runs_on_job_id", unique: true
+    t.index ["status"], name: "index_processing_runs_on_status"
+  end
+
   add_foreign_key "processed_documents", "employees"
+  add_foreign_key "processing_items", "employees", column: "matched_employee_id"
+  add_foreign_key "processing_items", "processing_runs"
 end

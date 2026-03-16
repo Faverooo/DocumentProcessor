@@ -10,7 +10,7 @@ module DocumentProcessing
     end
 
     def recipient_extractor
-      @recipient_extractor ||= DocumentRecipientExtractorService.new(bedrock_client: bedrock_client)
+      @recipient_extractor ||= DocumentRecipientExtractorService.new(llm_service: llm_service)
     end
 
     def recipient_resolver
@@ -18,11 +18,15 @@ module DocumentProcessing
     end
 
     def pdf_splitter(pdf:)
-      DocumentPdfSplitterService.new(pdf: pdf, ocr_service: ocr_service, bedrock_client: bedrock_client)
+      DocumentPdfSplitterService.new(pdf: pdf, ocr_service: ocr_service, llm_service: llm_service)
+    end
+
+    def notifier
+      @notifier ||= ActionCableNotifier.new(broadcaster: @broadcaster)
     end
 
     def broadcast(job_id, data)
-      @broadcaster.broadcast("document_processing:#{job_id}", data)
+      notifier.broadcast(job_id, data)
     end
 
     private
@@ -33,6 +37,10 @@ module DocumentProcessing
 
     def bedrock_client
       @bedrock_client ||= Aws::BedrockRuntime::Client.new(region: @aws_region)
+    end
+
+    def llm_service
+      @llm_service ||= LlmService.new(bedrock_client: bedrock_client)
     end
   end
 end

@@ -3,24 +3,26 @@ require "test_helper"
 class DocumentRecipientExtractorServiceTest < ActiveSupport::TestCase
   # Client finto che risponde con il testo fornito — nessuna chiamata HTTP ad AWS.
   def mock_bedrock(response_text)
-    body_io = StringIO.new({ "output" => { "message" => { "content" => [{ "text" => response_text }] } } }.to_json)
-    response = Struct.new(:body).new(body_io)
+    content_item = Struct.new(:text).new(response_text)
+    message = Struct.new(:content).new([content_item])
+    output = Struct.new(:message).new(message)
+    response = Struct.new(:output).new(output)
     client = Object.new
-    client.define_singleton_method(:invoke_model) { |_args| response }
+    client.define_singleton_method(:converse) { |_args| response }
     client
   end
 
   # Client che solleva un'eccezione alla chiamata
   def failing_bedrock(error)
     client = Object.new
-    client.define_singleton_method(:invoke_model) { |_args| raise error }
+    client.define_singleton_method(:converse) { |_args| raise error }
     client
   end
 
   # Client che non deve mai essere chiamato (input vuoto)
   def uncalled_bedrock
     client = Object.new
-    client.define_singleton_method(:invoke_model) { |_args| raise "invoke_model non doveva essere chiamato!" }
+    client.define_singleton_method(:converse) { |_args| raise "converse non doveva essere chiamato!" }
     client
   end
 

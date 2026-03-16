@@ -20,12 +20,13 @@ class DocumentRecipientResolverService
     @threshold = threshold
   end
 
-  # Matcha i nomi estratti contro il DB
+  # Matcha i nomi estratti contro il DB.
   # recipient_names: ["Mario Rossi", ...] da LLM
   # raw_text: fallback se recipient_names è vuoto
-  # Ritorna: Employee object se il match supera la soglia,
-  #          String (testo grezzo) se nessun candidato combacia,
-  #          nil solo se non c'è alcun testo da matchare
+  # Ritorna un DocumentProcessing::RecipientResolutionResult con status:
+  # - matched: employee valorizzato
+  # - unmatched: fallback_text valorizzato
+  # - empty: nessun input utilizzabile
   def resolve(recipient_names:, raw_text: nil)
     names = Array(recipient_names).reject(&:blank?)
 
@@ -39,7 +40,7 @@ class DocumentRecipientResolverService
     if search_terms.empty? && raw_text.present?
       search_terms = [normalize(raw_text)]
     end
-    return nil if search_terms.empty?
+    return empty_result if search_terms.empty?
 
     # Matcha ogni termine di ricerca e prendi il best match
     best_match = search_terms
@@ -47,9 +48,9 @@ class DocumentRecipientResolverService
       .max_by { |candidate| candidate[:score] }        # Prendi il migliore
 
     if best_match && best_match[:score] >= @threshold
-      best_match[:employee]   # Match trovato → ritorna l'oggetto Employee
+      matched_result(best_match)
     else
-      fallback_text           # Nessun match → ritorna il testo grezzo originale
+      unmatched_result(fallback_text:, best_match:)
     end
   end
 
@@ -60,6 +61,28 @@ class DocumentRecipientResolverService
     candidate_employees(normalized_term)  # Prendi candidati dal DB
       .map { |employee| score_candidate(employee, normalized_term) }  # Calcola score
       .compact  # Rimuovi nil
+  end
+
+  def matched_result(best_match)
+    DocumentProcessing::RecipientResolutionResult.new(
+      status: :matched,
+      employee: best_match[:employee],
+      score: best_match[:score],
+      matched_term: best_match[:term]
+    )
+  end
+
+  def unmatched_result(fallback_text:, best_match:)
+    DocumentProcessing::RecipientResolutionResult.new(
+      status: :unmatched,
+      fallback_text: fallback_text,
+      score: best_match&.dig(:score),
+      matched_term: best_match&.dig(:term)
+    )
+  end
+
+  def empty_result
+    DocumentProcessing::RecipientResolutionResult.new(status: :empty)
   end
 
   # Cerca dipendenti simili nel DB (pre-filtering via SQL per performanza)
@@ -136,7 +159,7 @@ class DocumentRecipientResolverService
     combined = (jw_score * 0.60 + char_score * 0.40) * length_penalty
     final_score = [exact_score, combined].max
 
-    { employee:, score: final_score }
+    { employee:, score: final_score, term: normalized_term }
   end
 
   # Normalizza un nome: decompone accenti Unicode, lowercase, rimuove punteggiatura
