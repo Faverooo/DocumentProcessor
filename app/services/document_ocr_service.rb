@@ -16,17 +16,23 @@ class DocumentOcrService
   end
 
   # OCR veloce su una singola pagina (per trovare breakpoint di split)
-  # Usato in full ocr oppure come fallback se LAYOUT non è disponibile o fallisce
+  # Usato come fallback se LAYOUT non è disponibile o fallisce
   def quick_ocr(page)
     tmp_pdf = CombinePDF.new << page
-    extract_lines(document_bytes: tmp_pdf.to_pdf)
+    extract_line_blocks(document_bytes: tmp_pdf.to_pdf).map(&:text).join("\n")
   end
 
   # OCR completo su un file intero (per estrazione destinatari)
+  # Ritorna { text: String, lines: [{ text:, confidence: }] }
   # Processa pagina per pagina perché Textract non supporta PDF multi-pagina in modalità sincrona
   def full_ocr(file_path)
     pdf = CombinePDF.load(file_path)
-    pdf.pages.map { |page| quick_ocr(page) }.join("\n\n")
+    line_items = pdf.pages.flat_map { |page| extract_line_items(page) }
+
+    {
+      text: line_items.map { |line| line[:text] }.join("\n"),
+      lines: line_items
+    }
   end
 
   private
@@ -47,14 +53,20 @@ class DocumentOcrService
     quick_ocr(page)
   end
 
-  # Estrae solo blocchi di tipo LINE (righe di testo)
-  # Filtra i metadati e unisce in una stringa
-  def extract_lines(document_bytes:)
+  def extract_line_items(page) # simile a extract_lines ma ritorna array di hash con testo e confidence
+    tmp_pdf = CombinePDF.new << page
+
+    extract_line_blocks(document_bytes: tmp_pdf.to_pdf).map do |block|
+      {
+        text: block.text.to_s,
+        confidence: block.respond_to?(:confidence) ? block.confidence.to_f : nil
+      }
+    end
+  end
+
+  def extract_line_blocks(document_bytes:) # converte i blocchi LINE di una pagina in una lista di hash
     response = @textract.detect_document_text(document: { bytes: document_bytes })
-    response.blocks
-      .select { |block| block.block_type == "LINE" }  # Solo righe
-      .map(&:text)  # Estrai il testo
-      .join("\n")   # Newline per preservare la struttura riga per riga
+    response.blocks.select { |block| block.block_type == "LINE" }
   end
 
   # Estrae blocchi LAYOUT primari (titoli, sezioni...)

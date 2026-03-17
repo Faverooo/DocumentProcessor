@@ -7,10 +7,10 @@ module DocumentProcessing
       @model_id = model_id
     end
 
-    def extract_recipients(text)
+    def extract_document_data(text)
       converse_json(
-        system_prompt: recipient_extraction_system_prompt,
-        user_prompt: recipient_extraction_user_prompt(text),
+        system_prompt: document_data_extraction_system_prompt,
+        user_prompt: document_data_extraction_user_prompt(text),
         max_tokens: 350,
         temperature: 0.0
       )
@@ -73,7 +73,7 @@ module DocumentProcessing
       JSON.parse(json_match[0])
     end
 
-    def recipient_extraction_system_prompt
+    def document_data_extraction_system_prompt
       <<~PROMPT
         Sei un sistema di estrazione strutturata.
         Devi identificare solo i destinatari principali del documento.
@@ -84,20 +84,22 @@ module DocumentProcessing
       PROMPT
     end
 
-    def recipient_extraction_user_prompt(text)
+    def document_data_extraction_user_prompt(text)
       <<~PROMPT
         Estrai i destinatari principali e i metadati principali del documento.
 
         Formato output obbligatorio:
-        {"recipients":[{"name":"Nome Cognome"}],"document":{"date":"YYYY-MM-DD or null","company":"Nome Azienda or null","department":"Nome Reparto or null"}}
+        {"recipients":[{"name":"Nome Cognome"}],"document":{"date":"YYYY-MM-DD or null","company":"Nome Azienda or null","department":"Nome Reparto or null"},"confidence":{"recipient":0.0,"date":0.0,"company":0.0,"department":0.0}}
 
         Regole:
         - recipients contiene solo destinatari principali.
         - document.date deve essere in formato ISO YYYY-MM-DD quando possibile, altrimenti null.
         - Se company o department non sono chiari, usa null.
+        - confidence contiene valori tra 0.0 e 1.0 per ogni campo.
+        - Se un campo e' assente o dubbio, la sua confidence deve essere 0.0.
 
         Se non trovi destinatari certi, lascia recipients vuoto ma compila comunque document dove possibile:
-        {"recipients":[],"document":{"date":null,"company":null,"department":null}}
+        {"recipients":[],"document":{"date":null,"company":null,"department":null},"confidence":{"recipient":0.0,"date":0.0,"company":0.0,"department":0.0}}
 
         Testo OCR documento:
         ---

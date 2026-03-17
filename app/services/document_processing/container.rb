@@ -9,8 +9,8 @@ module DocumentProcessing
       @ocr_service ||= DocumentOcrService.new(textract_client: textract_client)
     end
 
-    def recipient_extractor
-      @recipient_extractor ||= DocumentRecipientExtractorService.new(llm_service: llm_service)
+    def data_extractor
+      @data_extractor ||= DocumentDataExtractorService.new(llm_service: llm_service)
     end
 
     def recipient_resolver

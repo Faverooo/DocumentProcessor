@@ -12,7 +12,7 @@ Rails.application.routes.draw do
   # Test servizi
   get "/documents/test", to: "documents#test", as: :test_documents
   post "/documents/test_split", to: "documents#test_split", as: :test_split_documents
-  post "/documents/test_recipient", to: "documents#test_recipient", as: :test_recipient_documents
+  post "/documents/test_data", to: "documents#test_data", as: :test_data_documents
 
   # Defines the root path route ("/")
   root "documents#test"

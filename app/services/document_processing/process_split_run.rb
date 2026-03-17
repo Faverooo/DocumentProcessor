@@ -60,7 +60,7 @@ module DocumentProcessing
             status: "queued"
           )
 
-          RecipientExtractionJob.perform_later(mini_pdf_path, run.job_id, item.id)
+          DataExtractionJob.perform_later(mini_pdf_path, run.job_id, item.id)
         end
       end
     end

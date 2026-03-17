@@ -1,14 +1,14 @@
-# === DocumentRecipientExtractorService ===
-# Estrae i destinatari da un documento usando Amazon Nova Lite v1 via AWS Bedrock.
+# === DocumentDataExtractorService ===
+# Estrae i dati principali di un documento usando Amazon Nova Lite v1 via AWS Bedrock.
 #
 # Logica:
 #   1. Manda il testo OCR a Nova con prompt specifico
-#   2. Nova estrae SOLO i destinatari (ignora menzioni secondarie)
-#   3. Ritorna array di nomi normalizzati
+#   2. Nova estrae destinatari principali e metadati del documento
+#   3. Ritorna una struttura dati normalizzata
 #
-# Nota: Nova Lite è rapido e cost-effective per destinatari extraction.
+# Nota: Nova Lite e' rapido e cost-effective per document data extraction.
 #
-class DocumentRecipientExtractorService
+class DocumentDataExtractorService
   def initialize(llm_service: nil, bedrock_client: Aws::BedrockRuntime::Client.new)
     @llm_service = llm_service || DocumentProcessing::LlmService.new(bedrock_client: bedrock_client)
   end
@@ -20,34 +20,29 @@ class DocumentRecipientExtractorService
   #   metadata: { date: "2026-03-16", company: "ACME", department: "HR" }
   # }
   def extract(text)
-    return empty_extraction if text.to_s.strip.blank?
+    return empty_document_data if text.to_s.strip.blank?
 
-    parsed = ask_llm_for_recipients(text)  # Chiama Nova Lite via Bedrock
+    parsed = llm_service.extract_document_data(text)
 
-    # Estrai nomi e normalizza
     recipients = Array(parsed["recipients"]).filter_map do |entry|
       normalize_name(entry["name"] || entry[:name])
     end
 
     {
-      recipients: recipients.uniq, # Rimuovi duplicati
-      metadata: extract_metadata(parsed)
+      recipients: recipients.uniq,
+      metadata: extract_metadata(parsed),
+      llm_confidence: extract_llm_confidence(parsed)
     }
   rescue StandardError => error
-    Rails.logger.error("Errore estrazione destinatari LLM: #{error.message}")
-    empty_extraction
+    Rails.logger.error("Errore estrazione dati documento LLM: #{error.message}")
+    empty_document_data
   end
 
   private
 
   attr_reader :llm_service
 
-  # Invia il testo a Amazon Nova Lite via Converse e riceve la risposta in JSON
-  def ask_llm_for_recipients(text)
-    llm_service.extract_recipients(text)
-  end
-
-  # Pulisce il nome: rimuove spazi extra, scarta se troppo corto
+  # Pulisce il nome del destinatario: rimuove spazi extra, scarta se troppo corto.
   def normalize_name(name)
     cleaned = name.to_s.gsub(/\s+/, " ").strip
     return nil if cleaned.blank? || cleaned.length < 3
@@ -80,18 +75,44 @@ class DocumentRecipientExtractorService
     }
   end
 
+  def extract_llm_confidence(parsed)
+    confidence = parsed["confidence"] || parsed[:confidence] || {}
+
+    {
+      recipient: normalize_confidence(confidence["recipient"] || confidence[:recipient]),
+      date: normalize_confidence(confidence["date"] || confidence[:date]),
+      company: normalize_confidence(confidence["company"] || confidence[:company]),
+      department: normalize_confidence(confidence["department"] || confidence[:department])
+    }
+  end
+
   def normalize_field(value)
     cleaned = value.to_s.gsub(/\s+/, " ").strip
     cleaned.presence
   end
 
-  def empty_extraction
+  def normalize_confidence(value)
+    return 0.0 if value.nil?
+
+    numeric = value.to_f
+    return 0.0 if numeric.nan?
+
+    [[numeric, 0.0].max, 1.0].min.round(3)
+  end
+
+  def empty_document_data
     {
       recipients: [],
       metadata: {
         date: nil,
         company: nil,
         department: nil
+      },
+      llm_confidence: {
+        recipient: 0.0,
+        date: 0.0,
+        company: 0.0,
+        department: 0.0
       }
     }
   end

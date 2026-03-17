@@ -36,8 +36,8 @@ class DocumentsController < ApplicationController
     end
   end
 
-  # POST /documents/test_recipient
-  def test_recipient
+  # POST /documents/test_data
+  def test_data
     with_temp_pdf do |temp_path|
       job_id = SecureRandom.uuid
       run = ProcessingRun.create!(
@@ -53,11 +53,11 @@ class DocumentsController < ApplicationController
         status: "queued"
       )
 
-      RecipientExtractionJob.perform_later(temp_path, job_id, item.id)
+      DataExtractionJob.perform_later(temp_path, job_id, item.id)
       
       render json: {
         status: "queued",
-        message: "Recipient extraction job enqueued",
+        message: "Data extraction job enqueued",
         job_id: job_id
       }
     end
