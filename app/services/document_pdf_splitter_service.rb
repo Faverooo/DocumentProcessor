@@ -23,14 +23,17 @@ class DocumentPdfSplitterService
     @llm_service = llm_service || DocumentProcessing::LlmService.new(bedrock_client: bedrock_client)
   end
 
-  # Ritorna array di percorsi ai mini-PDF creati
+  # Ritorna array di hash con range e percorso del mini-PDF creato
   def split
     ranges = identify_ranges
     Rails.logger.info "[Splitter] Split chiamato, ranges calcolati: #{ranges.inspect}"
     
     mini_pdfs = ranges.each_with_index.map do |range, index|
       Rails.logger.info "[Splitter] Creando mini-PDF ##{index}: pagine #{range[:start]}→#{range[:end]}"
-      create_mini_pdf(range:, index:)
+      {
+        range:,
+        path: create_mini_pdf(range:, index:)
+      }
     end
     
     Rails.logger.info "[Splitter] Split completato: #{mini_pdfs.size} file creati"

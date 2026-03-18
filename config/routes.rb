@@ -13,6 +13,10 @@ Rails.application.routes.draw do
   get "/documents/test", to: "documents#test", as: :test_documents
   post "/documents/test_split", to: "documents#test_split", as: :test_split_documents
   post "/documents/test_data", to: "documents#test_data", as: :test_data_documents
+  get "/documents/uploads/:uploaded_document_id/extracted", to: "documents#extracted_index", as: :uploaded_document_extracted_documents
+  get "/documents/extracted/:id", to: "documents#extracted_show", as: :extracted_document
+  get "/documents/extracted/:id/pdf", to: "documents#extracted_pdf", as: :extracted_pdf_document
+  patch "/documents/extracted/:id/reassign_range", to: "documents#reassign_range", as: :reassign_extracted_document_range
 
   # Defines the root path route ("/")
   root "documents#test"

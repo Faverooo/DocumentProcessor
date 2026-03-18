@@ -18,22 +18,44 @@ class DocumentsController < ApplicationController
 
   # POST /documents/test_split
   def test_split
-    with_temp_pdf do |temp_path| #salva il file caricato in una posizione temporanea temp_path e poi lo passa al blocco, assicurandosi che venga cancellato dopo l'uso
-      job_id = SecureRandom.uuid
-      ProcessingRun.create!(
-        job_id: job_id,
-        status: "queued",
-        original_filename: params[:pdf].original_filename
-      )
+    file = params[:pdf]
+    return render_error("Nessun file selezionato") unless file.present?
 
-      PdfSplitJob.perform_later(temp_path, job_id)
-      
-      render json: {
-        status: "queued",
-        message: "Pipeline avviata: split in corso, processamento documenti automatico",
-        job_id: job_id
-      }
-    end
+    validation_error = validate_pdf_upload(file)
+    return render_error(validation_error) if validation_error
+
+    source_path = persist_uploaded_pdf(file)
+    return render_error("Errore nel salvataggio del file") unless source_path
+
+    page_count = CombinePDF.load(source_path).pages.size
+    uploaded_document = UploadedDocument.create!(
+      original_filename: file.original_filename,
+      storage_path: source_path,
+      page_count: page_count,
+      category: params[:category],
+      override_company: params[:company],
+      override_department: params[:department],
+      competence_period: params[:competence_period]
+    )
+
+    job_id = SecureRandom.uuid
+    ProcessingRun.create!(
+      job_id: job_id,
+      status: "queued",
+      original_filename: file.original_filename,
+      uploaded_document: uploaded_document
+    )
+
+    pdf_split_job_class.perform_later(source_path, job_id)
+
+    render json: {
+      status: "queued",
+      message: "Pipeline avviata: split in corso, processamento documenti automatico",
+      job_id: job_id,
+      uploaded_document_id: uploaded_document.id
+    }
+  rescue StandardError => e
+    render_error("Errore: #{e.message}")
   end
 
   # POST /documents/test_data
@@ -53,7 +75,13 @@ class DocumentsController < ApplicationController
         status: "queued"
       )
 
-      DataExtractionJob.perform_later(temp_path, job_id, item.id)
+      data_extraction_job_class.perform_later(
+        temp_path,
+        {
+          job_id: job_id,
+          processing_item_id: item.id
+        }
+      )
       
       render json: {
         status: "queued",
@@ -61,6 +89,105 @@ class DocumentsController < ApplicationController
         job_id: job_id
       }
     end
+  end
+
+  # GET /documents/uploads/:uploaded_document_id/extracted
+  def extracted_index
+    uploaded_document = UploadedDocument.includes(extracted_documents: :matched_employee).find(params[:uploaded_document_id])
+
+    render json: {
+      uploaded_document: {
+        id: uploaded_document.id,
+        original_filename: uploaded_document.original_filename,
+        page_count: uploaded_document.page_count,
+        created_at: uploaded_document.created_at
+      },
+      extracted_documents: uploaded_document.extracted_documents.order(:sequence).map { |doc| extracted_document_payload(doc) }
+    }
+  rescue ActiveRecord::RecordNotFound
+    render json: { status: "error", message: "Documento sorgente non trovato" }, status: :not_found
+  end
+
+  # GET /documents/extracted/:id
+  def extracted_show
+    extracted_document = ExtractedDocument.includes(:matched_employee).find(params[:id])
+    render json: { extracted_document: extracted_document_payload(extracted_document) }
+  rescue ActiveRecord::RecordNotFound
+    render json: { status: "error", message: "Documento estratto non trovato" }, status: :not_found
+  end
+
+  # GET /documents/extracted/:id/pdf
+  def extracted_pdf
+    extracted_document = ExtractedDocument.find(params[:id])
+    source_path = extracted_document.uploaded_document.storage_path
+    return render_error("PDF sorgente non disponibile") unless File.exist?(source_path)
+
+    temp_pdf_path = page_range_pdf_service(source_path).build_temp_pdf(
+      page_start: extracted_document.page_start,
+      page_end: extracted_document.page_end
+    )
+
+    filename = "estratto_#{extracted_document.id}_p#{extracted_document.page_start}-#{extracted_document.page_end}.pdf"
+    send_data File.binread(temp_pdf_path), filename: filename, type: "application/pdf", disposition: "attachment"
+  rescue ActiveRecord::RecordNotFound
+    render json: { status: "error", message: "Documento estratto non trovato" }, status: :not_found
+  rescue ArgumentError => e
+    render_error(e.message)
+  ensure
+    File.delete(temp_pdf_path) if defined?(temp_pdf_path) && temp_pdf_path && File.exist?(temp_pdf_path)
+  end
+
+  # PATCH /documents/extracted/:id/reassign_range
+  def reassign_range
+    extracted_document = ExtractedDocument.find(params[:id])
+    page_start, page_end = parse_range_params
+    return render_error("Range pagine non valido") if page_start.nil? || page_end.nil?
+    return render_error("Range pagine non valido") if page_start <= 0 || page_end <= 0 || page_end < page_start
+
+    uploaded_document = extracted_document.uploaded_document
+    if page_end > uploaded_document.page_count
+      return render_error("Range oltre il numero di pagine disponibili (max #{uploaded_document.page_count})")
+    end
+
+    extracted_document.update!(
+      page_start: page_start,
+      page_end: page_end,
+      status: "queued",
+      metadata: {},
+      recipients: [],
+      fallback_text: nil,
+      confidence: {},
+      recipient_name: nil,
+      matched_employee: nil,
+      error_message: nil,
+      processed_at: nil
+    )
+
+    source_path = uploaded_document.storage_path
+    return render_error("PDF sorgente non disponibile") unless File.exist?(source_path)
+
+    temp_pdf_path = page_range_pdf_service(source_path).build_temp_pdf(
+      page_start: page_start,
+      page_end: page_end
+    )
+    data_extraction_job_class.perform_later(
+      temp_pdf_path,
+      {
+        extracted_document_id: extracted_document.id
+      }
+    )
+
+    render json: {
+      status: "queued",
+      message: "Riassegnazione completata, analisi rilanciata",
+      extracted_document_id: extracted_document.id,
+      page_start: page_start,
+      page_end: page_end
+    }
+  rescue ActiveRecord::RecordNotFound
+    render json: { status: "error", message: "Documento estratto non trovato" }, status: :not_found
+  rescue ArgumentError => e
+    render_error(e.message)
   end
 
   private
@@ -91,6 +218,19 @@ class DocumentsController < ApplicationController
     file.rewind if file.respond_to?(:rewind)
     File.binwrite(temp_path, file.read)
     temp_path.to_s
+  end
+
+  def persist_uploaded_pdf(file)
+    storage_dir = Rails.root.join("storage", "uploads", "source_documents")
+    FileUtils.mkdir_p(storage_dir)
+
+    safe_name = sanitized_original_filename(file.original_filename)
+    storage_path = storage_dir.join("#{Time.current.to_i}_#{SecureRandom.hex(8)}_#{safe_name}")
+
+    file.tempfile.rewind if file.respond_to?(:tempfile) && file.tempfile.respond_to?(:rewind)
+    file.rewind if file.respond_to?(:rewind)
+    File.binwrite(storage_path, file.read)
+    storage_path.to_s
   end
 
   def validate_pdf_upload(file)
@@ -131,7 +271,78 @@ class DocumentsController < ApplicationController
     sanitized
   end
 
+  def parse_range_params
+    if params[:page_range].present?
+      match = params[:page_range].to_s.strip.match(/\A(\d+)\s*[-:]\s*(\d+)\z/)
+      return [nil, nil] unless match
+
+      return [match[1].to_i, match[2].to_i]
+    end
+
+    start_page = integer_or_nil(params[:page_start])
+    end_page = integer_or_nil(params[:page_end])
+    return [nil, nil] if start_page.nil? || end_page.nil?
+
+    [start_page, end_page]
+  end
+
+  def integer_or_nil(value)
+    Integer(value)
+  rescue ArgumentError, TypeError
+    nil
+  end
+
+  def extracted_document_payload(document)
+    {
+      id: document.id,
+      uploaded_document_id: document.uploaded_document_id,
+      sequence: document.sequence,
+      status: document.status,
+      page_start: document.page_start,
+      page_end: document.page_end,
+      metadata: document.metadata,
+      recipients: document.recipients,
+      confidence: document.confidence,
+      recipient_name: document.recipient_name,
+      matched_employee: format_employee(document.matched_employee),
+      error_message: document.error_message,
+      processed_at: document.processed_at,
+      document_type: document.document_type,
+      process_time_seconds: document.process_time_seconds,
+      created_at: document.created_at,
+      updated_at: document.updated_at,
+      pdf_download_url: extracted_pdf_document_url(id: document.id)
+    }
+  end
+
+  def format_employee(employee)
+    return nil unless employee
+
+    {
+      id: employee.id,
+      name: employee.name,
+      email: employee.email,
+      employee_code: employee.employee_code
+    }
+  end
+
   def render_error(message)
     render json: { status: "error", message: }, status: :bad_request
+  end
+
+  def page_range_pdf_service(source_pdf_path)
+    page_range_pdf_service_class.new(source_pdf_path: source_pdf_path)
+  end
+
+  def page_range_pdf_service_class
+    DocumentPageRangePdfService
+  end
+
+  def data_extraction_job_class
+    DataExtractionJob
+  end
+
+  def pdf_split_job_class
+    PdfSplitJob
   end
 end

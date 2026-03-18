@@ -10,13 +10,37 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_13_120002) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_18_124000) do
   create_table "employees", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email"
     t.string "employee_code"
     t.string "name"
     t.datetime "updated_at", null: false
+  end
+
+  create_table "extracted_documents", force: :cascade do |t|
+    t.json "confidence", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.string "document_type"
+    t.text "error_message"
+    t.text "fallback_text"
+    t.integer "matched_employee_id"
+    t.json "metadata", default: {}, null: false
+    t.integer "page_end", null: false
+    t.integer "page_start", null: false
+    t.float "process_time_seconds"
+    t.datetime "processed_at"
+    t.string "recipient_name"
+    t.json "recipients", default: [], null: false
+    t.integer "sequence", null: false
+    t.string "status", default: "queued", null: false
+    t.datetime "updated_at", null: false
+    t.integer "uploaded_document_id", null: false
+    t.index ["matched_employee_id"], name: "index_extracted_documents_on_matched_employee_id"
+    t.index ["status"], name: "index_extracted_documents_on_status"
+    t.index ["uploaded_document_id", "sequence"], name: "index_extracted_documents_on_uploaded_document_id_and_sequence", unique: true
+    t.index ["uploaded_document_id"], name: "index_extracted_documents_on_uploaded_document_id"
   end
 
   create_table "processed_documents", force: :cascade do |t|
@@ -32,6 +56,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_13_120002) do
   create_table "processing_items", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "error_message"
+    t.integer "extracted_document_id"
     t.string "filename", null: false
     t.integer "matched_employee_id"
     t.integer "processing_run_id", null: false
@@ -39,6 +64,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_13_120002) do
     t.integer "sequence", null: false
     t.string "status", default: "queued", null: false
     t.datetime "updated_at", null: false
+    t.index ["extracted_document_id"], name: "index_processing_items_on_extracted_document_id"
     t.index ["matched_employee_id"], name: "index_processing_items_on_matched_employee_id"
     t.index ["processing_run_id", "sequence"], name: "index_processing_items_on_processing_run_id_and_sequence", unique: true
     t.index ["processing_run_id"], name: "index_processing_items_on_processing_run_id"
@@ -56,11 +82,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_13_120002) do
     t.string "status", default: "queued", null: false
     t.integer "total_documents", default: 0, null: false
     t.datetime "updated_at", null: false
+    t.integer "uploaded_document_id"
     t.index ["job_id"], name: "index_processing_runs_on_job_id", unique: true
     t.index ["status"], name: "index_processing_runs_on_status"
+    t.index ["uploaded_document_id"], name: "index_processing_runs_on_uploaded_document_id"
   end
 
+  create_table "uploaded_documents", force: :cascade do |t|
+    t.string "category"
+    t.string "competence_period"
+    t.datetime "created_at", null: false
+    t.string "original_filename", null: false
+    t.string "override_company"
+    t.string "override_department"
+    t.integer "page_count", default: 0, null: false
+    t.string "storage_path", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  add_foreign_key "extracted_documents", "employees", column: "matched_employee_id"
+  add_foreign_key "extracted_documents", "uploaded_documents"
   add_foreign_key "processed_documents", "employees"
   add_foreign_key "processing_items", "employees", column: "matched_employee_id"
+  add_foreign_key "processing_items", "extracted_documents"
   add_foreign_key "processing_items", "processing_runs"
+  add_foreign_key "processing_runs", "uploaded_documents"
 end

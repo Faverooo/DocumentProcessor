@@ -1,4 +1,5 @@
 class ProcessingRun < ApplicationRecord
+  belongs_to :uploaded_document, optional: true
   has_many :processing_items, dependent: :destroy
 
   enum :status,

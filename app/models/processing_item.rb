@@ -1,5 +1,6 @@
 class ProcessingItem < ApplicationRecord
   belongs_to :processing_run
+  belongs_to :extracted_document, optional: true
   belongs_to :matched_employee, class_name: "Employee", optional: true
 
   enum :status,
