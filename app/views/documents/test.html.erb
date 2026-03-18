@@ -223,8 +223,6 @@
       const meta  = message.extracted_document_data || {};
       const conf  = message.extracted_confidence   || {};
       const glob  = conf.global   || {};
-      const llm   = conf.llm      || {};
-      const txtr  = conf.textract || {};
 
       const confBar = (val) => {
         const safeVal = val == null ? 0 : Number(val);
@@ -237,8 +235,6 @@
         <tr>
           <td>${label}</td>
           <td>${confBar(glob[field])}</td>
-          <td>${confBar(llm[field])}</td>
-          <td>${confBar(txtr[field])}</td>
         </tr>`;
 
       body = `
@@ -251,9 +247,9 @@
         </table>
 
         <details class="conf-details">
-          <summary>Confidenza per campo</summary>
+          <summary>Confidenza globale</summary>
           <table class="meta-table">
-            <tr><th>Campo</th><th>Globale</th><th>LLM</th><th>Textract</th></tr>
+            <tr><th>Campo</th><th>Globale</th></tr>
             ${confRow('Destinatario', 'recipient')}
             ${confRow('Data',         'date')}
             ${confRow('Azienda',      'company')}

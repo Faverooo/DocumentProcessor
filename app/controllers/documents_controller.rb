@@ -307,7 +307,9 @@ class DocumentsController < ApplicationController
       matched_employee: format_employee(document.matched_employee),
       error_message: document.error_message,
       processed_at: document.processed_at,
-      document_type: document.document_type,
+      document_type: (
+        document.metadata.is_a?(Hash) && (document.metadata[:type] || document.metadata["type"]) || document.document_type
+      ),
       process_time_seconds: document.process_time_seconds,
       created_at: document.created_at,
       updated_at: document.updated_at,

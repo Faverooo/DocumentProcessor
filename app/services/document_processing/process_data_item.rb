@@ -134,7 +134,6 @@ module DocumentProcessing
         recipients: recipients,
         fallback_text: resolution&.fallback_text,
         confidence: global_confidence,
-        document_type: (metadata_builder.document_type || extracted_document.document_type),
         process_time_seconds: process_duration_seconds.to_f,
         recipient_name: resolution.matched? ? resolution.employee.name : nil,
         matched_employee: resolution.matched? ? resolution.employee : nil,
