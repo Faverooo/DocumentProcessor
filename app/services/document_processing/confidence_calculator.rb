@@ -15,7 +15,9 @@ module DocumentProcessing
         date: merge_confidence(llm_confidence[:date], textract[:date]),
         company: merge_confidence(llm_confidence[:company], textract[:company]),
         department: merge_confidence(llm_confidence[:department], textract[:department]),
-        type: llm_confidence_value(:type)
+        type: llm_confidence_value(:type),
+        reason: merge_confidence(llm_confidence[:reason], textract[:reason]),
+        competence: merge_confidence(llm_confidence[:competence], textract[:competence])
       }
 
       apply_override_confidence(global)
@@ -38,6 +40,9 @@ module DocumentProcessing
         date: confidence_for_values(ocr_lines, date_candidates(metadata[:date])),
         company: confidence_for_values(ocr_lines, [metadata[:company]]),
         department: confidence_for_values(ocr_lines, [metadata[:department]])
+        ,
+        reason: confidence_for_values(ocr_lines, [metadata[:reason]]),
+        competence: confidence_for_values(ocr_lines, [metadata[:competence]])
       }
     end
 
@@ -47,7 +52,7 @@ module DocumentProcessing
       global[:company] = 1.0 if uploaded_document.override_company.present?
       global[:department] = 1.0 if uploaded_document.override_department.present?
       global[:type] = 1.0 if uploaded_document.category.present?
-      global[:date] = 1.0 if uploaded_document.competence_period.present?
+      global[:competence] = 1.0 if uploaded_document.competence_period.present?
       global
     end
 

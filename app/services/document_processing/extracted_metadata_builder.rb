@@ -9,8 +9,10 @@ module DocumentProcessing
       {
         company: uploaded_document&.override_company.presence || metadata[:company],
         department: uploaded_document&.override_department.presence || metadata[:department],
-        type: (metadata[:type].presence || uploaded_document&.category.presence),
-        date: uploaded_document&.competence_period.presence || metadata[:date]
+        type: (uploaded_document&.category.presence || metadata[:type].presence),
+        date: uploaded_document&.competence_period.presence || metadata[:date],
+        reason: metadata[:reason],
+        competence: (uploaded_document&.competence_period.presence || metadata[:competence])
       }
     end
 

@@ -1,9 +1,9 @@
 namespace :pdf do
   desc "Testa lo split di un PDF multi-documento"
-  task :test_split, [:file_path] => :environment do |_task, args|
+  task :split, [:file_path] => :environment do |_task, args|
     unless args[:file_path]
       puts "❌ Errore: specifica il path del PDF"
-      puts "Uso: bin/rails pdf:test_split['/path/to/documento.pdf']"
+      puts "Uso: bin/rails pdf:split['/path/to/documento.pdf']"
       exit 1
     end
 
@@ -70,4 +70,7 @@ namespace :pdf do
 
     puts "\n✨ Test completato!"
   end
+
+  # Backwards compatible alias
+  task :test_split => :split
 end

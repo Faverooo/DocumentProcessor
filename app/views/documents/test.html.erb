@@ -148,7 +148,7 @@
     documentsListDiv.innerHTML = '';
 
     try {
-      const response = await fetch('<%= test_split_documents_path %>', {
+      const response = await fetch('<%= split_documents_path %>', {
         method: 'POST',
         body: formData,
         headers: {

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_18_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_18_143000) do
   create_table "employees", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email"
@@ -40,16 +40,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_18_140000) do
     t.index ["status"], name: "index_extracted_documents_on_status"
     t.index ["uploaded_document_id", "sequence"], name: "index_extracted_documents_on_uploaded_document_id_and_sequence", unique: true
     t.index ["uploaded_document_id"], name: "index_extracted_documents_on_uploaded_document_id"
-  end
-
-  create_table "processed_documents", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.integer "employee_id", null: false
-    t.string "filename"
-    t.string "recipient_name"
-    t.string "status"
-    t.datetime "updated_at", null: false
-    t.index ["employee_id"], name: "index_processed_documents_on_employee_id"
   end
 
   create_table "processing_items", force: :cascade do |t|
@@ -101,7 +91,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_18_140000) do
 
   add_foreign_key "extracted_documents", "employees", column: "matched_employee_id"
   add_foreign_key "extracted_documents", "uploaded_documents"
-  add_foreign_key "processed_documents", "employees"
   add_foreign_key "processing_items", "employees", column: "matched_employee_id"
   add_foreign_key "processing_items", "extracted_documents"
   add_foreign_key "processing_items", "processing_runs"

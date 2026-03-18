@@ -77,7 +77,7 @@ module DocumentProcessing
       <<~PROMPT
         Sei un sistema di estrazione strutturata.
         Devi identificare solo i destinatari principali del documento.
-        Inoltre devi estrarre, se presenti e affidabili, i metadati principali del documento: data, azienda, reparto.
+        Inoltre devi estrarre, se presenti e affidabili, i metadati principali del documento: data, azienda, reparto, tipo (categoria).
         Non includere firme, mittenti, referenti interni, persone citate nel corpo testo o menzioni secondarie.
         Se un dato non e certo, valorizzalo a null.
         Rispondi sempre e solo con JSON valido.
@@ -89,17 +89,17 @@ module DocumentProcessing
         Estrai i destinatari principali e i metadati principali del documento.
 
         Formato output obbligatorio:
-        {"recipients":[{"name":"Nome Cognome"}],"document":{"date":"YYYY-MM-DD or null","company":"Nome Azienda or null","department":"Nome Reparto or null"},"confidence":{"recipient":0.0,"date":0.0,"company":0.0,"department":0.0}}
+        {"recipients":[{"name":"Nome Cognome"}],"document":{"date":"YYYY-MM-DD or null","company":"Nome Azienda or null","department":"Nome Reparto or null","type":"Tipo/Category or null","reason":"Causale or null","competence":"Competence/period or null"},"confidence":{"recipient":0.0,"date":0.0,"company":0.0,"department":0.0,"type":0.0,"reason":0.0,"competence":0.0}}
 
         Regole:
         - recipients contiene solo destinatari principali.
         - document.date deve essere in formato ISO YYYY-MM-DD quando possibile, altrimenti null.
-        - Se company o department non sono chiari, usa null.
-        - confidence contiene valori tra 0.0 e 1.0 per ogni campo.
+        - Se company, department, type, reason o competence non sono chiari, usa null.
+        - confidence contiene valori tra 0.0 e 1.0 per ogni campo (inclusi `reason` e `competence`).
         - Se un campo e' assente o dubbio, la sua confidence deve essere 0.0.
 
         Se non trovi destinatari certi, lascia recipients vuoto ma compila comunque document dove possibile:
-        {"recipients":[],"document":{"date":null,"company":null,"department":null},"confidence":{"recipient":0.0,"date":0.0,"company":0.0,"department":0.0}}
+        {"recipients":[],"document":{"date":null,"company":null,"department":null,"type":null,"reason":null,"competence":null},"confidence":{"recipient":0.0,"date":0.0,"company":0.0,"department":0.0,"type":0.0,"reason":0.0,"competence":0.0}}
 
         Testo OCR documento:
         ---

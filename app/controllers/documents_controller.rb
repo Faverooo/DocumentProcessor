@@ -16,8 +16,8 @@ class DocumentsController < ApplicationController
   def test
   end
 
-  # POST /documents/test_split
-  def test_split
+  # POST /documents/split
+  def split
     file = params[:pdf]
     return render_error("Nessun file selezionato") unless file.present?
 
@@ -308,7 +308,8 @@ class DocumentsController < ApplicationController
       error_message: document.error_message,
       processed_at: document.processed_at,
       document_type: (
-        document.metadata.is_a?(Hash) && (document.metadata[:type] || document.metadata["type"]) || document.document_type
+        (document.metadata.is_a?(Hash) && (document.metadata[:type] || document.metadata["type"])) ||
+        document.uploaded_document&.category
       ),
       process_time_seconds: document.process_time_seconds,
       created_at: document.created_at,

@@ -1,50 +1,123 @@
-Apri il terminale e scrivi:
+- employees:
+  - id
+  - created_at (datetime, null: false)
+  - email (string)
+  - employee_code (string)
+  - name (string)
+  - updated_at (datetime, null: false)
 
-Bash
-# Crea il progetto usando SQLite (default) e saltando i test di default (useremo RSpec dopo se serve)
-rails new DocumentProcessor --database=sqlite3
-cd DocumentProcessor
-Aggiungi subito le gemme che ci servono nel Gemfile:
+- extracted_documents:
+  - id
+  - confidence (json, default: {}, null: false)
+  - created_at (datetime, null: false)
+  - error_message (text)
+  - fallback_text (text)
+  - matched_employee_id (integer)
+  - metadata (json, default: {}, null: false)
+  - page_end (integer, null: false)
+  - page_start (integer, null: false)
+  - process_time_seconds (float)
+  - processed_at (datetime)
+  - recipient_name (string)
+  - recipients (json, default: [], null: false)
+  - sequence (integer, null: false)
+  - status (string, default: "queued", null: false)
+  - updated_at (datetime, null: false)
+  - uploaded_document_id (integer, null: false)
 
-Ruby
-# Apri il file Gemfile e aggiungi in fondo:
-gem 'combine_pdf'        # Per splittare i PDF
-gem 'aws-sdk-textract'   # Per l'OCR (anche se faremo stub/mock)
-gem 'aws-sdk-s3'         # Per lo storage
-gem 'faker'              # Per generare dati finti nel DB
-Poi esegui bundle install nel terminale.
+- processing_items:
+  - id
+  - created_at (datetime, null: false)
+  - error_message (text)
+  - extracted_document_id (integer)
+  - filename (string, null: false)
+  - matched_employee_id (integer)
+  - processing_run_id (integer, null: false)
+  - recipient_name (string)
+  - sequence (integer, null: false)
+  - status (string, default: "queued", null: false)
+  - updated_at (datetime, null: false)
+
+- processing_runs:
+  - id
+  - completed_at (datetime)
+  - created_at (datetime, null: false)
+  - error_message (text)
+  - job_id (string, null: false)
+  - original_filename (string)
+  - processed_documents (integer, default: 0, null: false)
+  - started_at (datetime)
+  - status (string, default: "queued", null: false)
+  - total_documents (integer, default: 0, null: false)
+  - updated_at (datetime, null: false)
+  - uploaded_document_id (integer)
+
+- uploaded_documents:
+  - id
+  - category (string)
+  - competence_period (string)
+  - created_at (datetime, null: false)
+  - original_filename (string, null: false)
+  - override_company (string)
+  - override_department (string)
+  - page_count (integer, default: 0, null: false)
+  - storage_path (string, null: false)
+  - updated_at (datetime, null: false)
 
 
-Dobbiamo creare due entità: gli Employee (i destinatari nel tuo DB aziendale) e i Documents (i file che carichi).
 
-Bash
-# Crea la tabella degli impiegati
-rails generate model Employee name:string email:string employee_code:string
 
-# Crea la tabella dei documenti processati
-rails generate model ProcessedDocument filename:string status:string recipient_name:string employee:references
 
-# Applica le modifiche al database (SQLite)
-rails db:migrate
 
-Invece di inserire i dati a mano, usiamo il file db/seeds.rb. Questo è il tuo "database fittizio".
+  #############################################################################
 
-Ruby
-# db/seeds.rb
-puts "Svuotando il database..."
-Employee.destroy_all
+- POST /documents/split  
+  - Input: multipart/form-data: `pdf` (file, required), optional fields `category` (string), `company` (string), `department` (string), `competence_period` (string)
+  - Restituisce: `{ status: "queued", message: string, job_id: string, uploaded_document_id: integer }`  
+  - WebSocket (sottoscrivere `job_id`):  
+    - `split_completed`: `{ status: "success" | "error", original_pages: int, mini_pdfs_count: int, mini_pdfs: [string], message?: string }` inviato al termine del processo di split.  
+    - `document_processed`: `{ event: "document_processed", status: "success" | "error", extracted_document_id: int, filename?: string, ocr_text?: string, extracted_names?: [string], extracted_document_data?: { company: string|null, department: string|null, date: string|null, type: string|null, reason: string|null, competence: string|null }, extracted_confidence?: { recipient: float, date: float, company: float, department: float, type: float, reason: float, competence: float }, matched_recipient?: { id: int, name: string, email: string, employee_code: string }, fallback_text?: string, message?: string }` inviato quando un mini‑PDF è stato processato (successo o errore).  
+    - `processing_completed`: `{ status: "success" | "error" }` inviato quando il run è finito.
 
-puts "Creando impiegati fittizi..."
-10.times do
-  Employee.create!(
-    name: Faker::Name.name,
-    email: Faker::Internet.email,
-    employee_code: "EMP#{rand(1000..9999)}"
-  )
-end
+- POST /documents/test_data  NON CREDO LA USERETE
+  - Input: multipart/form-data: `pdf` (file, required)
+  - Restituisce: `{ status: "queued", message: string, job_id: string }`  
+  - WebSocket: può ricevere `document_queued` e poi `document_processed`/`document_error` per il singolo item.
 
-# Aggiungiamo un utente specifico per i nostri test
-Employee.create!(name: "Mario Rossi", email: "mario.rossi@azienda.it", employee_code: "EMP0001")
+- GET /documents/uploads/:uploaded_document_id/extracted  
+  - Input: path param `uploaded_document_id` (integer)
+  - Restituisce:  
+    {
+      uploaded_document: { id, original_filename, page_count, created_at, ... },
+      extracted_documents: [ extracted_document_payload, ... ]
+    }  
+  - `extracted_document_payload` include: `id, sequence, status, page_start, page_end, metadata, recipients, confidence, recipient_name, matched_employee, error_message, processed_at, pdf_download_url, process_time_seconds, created_at, updated_at`  
+  - WebSocket: non strettamente necessario (è snapshot), ma il canale invierà aggiornamenti `document_processed` / `document_error` quando i singoli documenti vengono processati.
 
-puts "Creati #{Employee.count} impiegati."
-Esegui rails db:seed per riempire il DB.
+- GET /documents/extracted/:id  
+  - Input: path param `id` (integer)
+  - Restituisce: `{ extracted_document: extracted_document_payload }` (vedi sopra)  
+  - WebSocket: aspettarsi eventuali `document_processed` aggiornamenti per lo stesso `id`.
+
+- GET /documents/extracted/:id/pdf  
+  - Input: path param `id` (integer)  
+  - Restituisce: stream PDF (attachment) generato on‑demand.  
+  - WebSocket: nessun messaggio specifico; UI scarica quando l'utente clicca.
+
+- PATCH /documents/extracted/:id/reassign_range  
+  - Input: path param `id` (integer) and body either JSON `{ "page_start": int, "page_end": int }` or form-data `page_range` (string "X-Y")  
+  - Restituisce: `{ status: "queued", message: string, extracted_document_id, page_start, page_end }`  
+  - WebSocket: nessun evento aggiuntivo specifico viene inviato; ascolta `document_processed` / `processing_completed` per sapere quando quel documento è stato rielaborato.
+
+- GET /processing_runs/:job_id (consigliato)  
+  - Input: path param `job_id` (string)  
+  - Restituisce: `{ job_id, status, total_documents, processed_documents, started_at, completed_at, items: [{sequence, status, extracted_document_id}] }`  
+  - Uso: utile per polling periodico se WebSocket non disponibile.
+
+WebSocket: come sottoscrivere e cosa aspettarsi
+- Canale: `DocumentProcessingChannel` (ActionCable)  
+- Subscribe identifier (client): `{"channel":"DocumentProcessingChannel","job_id":"<JOB_ID>"}`  
+- Messaggi che il client può ricevere (tipo + payload):
+  - `split_completed`: `{ status: "success" | "error", original_pages: int, mini_pdfs_count: int, mini_pdfs: [string], message?: string }` (fine split)
+  - `document_processed`: `{ event: "document_processed", status: "success" | "error", extracted_document_id: int, filename?: string, ocr_text?: string, extracted_names?: [string], extracted_document_data?: {...}, extracted_confidence?: float, matched_recipient?: {id,name,email,employee_code}, fallback_text?: string, message?: string }` (fine elaborazione singolo item)
+  - `processing_completed`: `{ status: "success" | "error" }` (fine run)
