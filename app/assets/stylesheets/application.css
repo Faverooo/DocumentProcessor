@@ -1,10 +1,345 @@
-/*
- * This is a manifest file that'll be compiled into application.css.
- *
- * With Propshaft, assets are served efficiently without preprocessing steps. You can still include
- * application-wide styles in this file, but keep in mind that CSS precedence will follow the standard
- * cascading order, meaning styles declared later in the document or manifest will override earlier ones,
- * depending on specificity.
- *
- * Consider organizing styles into separate files for maintainability.
- */
+:root {
+	--bg: #f4efe7;
+	--surface: #fffdf9;
+	--ink: #1f1f1f;
+	--ink-soft: #6c6259;
+	--line: #e8ddd0;
+	--brand: #0d5c63;
+	--brand-2: #44a1a0;
+	--ok: #1f8a4c;
+	--warn: #b87400;
+	--danger: #b42318;
+	--radius: 16px;
+	--shadow: 0 10px 30px rgba(26, 22, 17, 0.1);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+	color: var(--ink);
+	background:
+		radial-gradient(circle at 0% 0%, #f9d5b7 0%, rgba(249, 213, 183, 0) 36%),
+		radial-gradient(circle at 100% 0%, #cde9ea 0%, rgba(205, 233, 234, 0) 40%),
+		linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%);
+	min-height: 100vh;
+}
+
+.dp-shell {
+	max-width: 1240px;
+	margin: 0 auto;
+	padding: 30px 18px 40px;
+}
+
+.dp-hero {
+	background: linear-gradient(135deg, #10343b 0%, #0d5c63 50%, #218f95 100%);
+	border-radius: 24px;
+	color: #fff;
+	box-shadow: var(--shadow);
+	padding: 28px;
+	margin-bottom: 22px;
+}
+
+.dp-hero h1 {
+	margin: 0;
+	font-size: clamp(1.6rem, 3vw, 2.4rem);
+	line-height: 1.2;
+}
+
+.dp-hero p {
+	margin: 10px 0 0;
+	color: rgba(255, 255, 255, 0.88);
+}
+
+.dp-grid {
+	display: grid;
+	grid-template-columns: 1.2fr 1fr;
+	gap: 18px;
+}
+
+.dp-card {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	padding: 18px;
+}
+
+.dp-card h2,
+.dp-card h3 {
+	margin-top: 0;
+	margin-bottom: 10px;
+}
+
+.dp-small {
+	color: var(--ink-soft);
+	font-size: 0.94rem;
+}
+
+.dp-form-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+
+.dp-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.dp-field label {
+	font-size: 0.86rem;
+	color: var(--ink-soft);
+	font-weight: 600;
+}
+
+.dp-field input {
+	width: 100%;
+	border: 1px solid #d8ccbf;
+	border-radius: 10px;
+	padding: 10px 12px;
+	background: #fffcf8;
+}
+
+.dp-field input:focus {
+	outline: none;
+	border-color: var(--brand);
+	box-shadow: 0 0 0 3px rgba(13, 92, 99, 0.15);
+}
+
+.dp-field-full {
+	grid-column: 1 / -1;
+}
+
+.dp-actions {
+	margin-top: 12px;
+	display: flex;
+	gap: 10px;
+}
+
+.dp-button {
+	border: 0;
+	border-radius: 11px;
+	padding: 10px 14px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.dp-button-primary {
+	background: linear-gradient(135deg, var(--brand), var(--brand-2));
+	color: #fff;
+}
+
+.dp-button-secondary {
+	background: #ece4db;
+	color: #3a332b;
+}
+
+.dp-status {
+	margin-top: 14px;
+	border-radius: 12px;
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	background: #fff;
+	font-size: 0.95rem;
+}
+
+.dp-status-info {
+	border-color: #9dcad1;
+	background: #eef9fb;
+}
+
+.dp-status-success {
+	border-color: #9bd6af;
+	background: #ebf8f0;
+}
+
+.dp-status-error {
+	border-color: #f0b3ad;
+	background: #fff1f0;
+}
+
+.dp-stream {
+	max-height: 248px;
+	overflow: auto;
+	border: 1px dashed #d5c8ba;
+	border-radius: 10px;
+	padding: 10px;
+	background: #fffdfa;
+}
+
+.dp-stream-item {
+	border-bottom: 1px solid #efe5da;
+	padding: 8px 2px;
+	font-size: 0.92rem;
+}
+
+.dp-stream-item:last-child {
+	border-bottom: 0;
+}
+
+.dp-layout-3 {
+	margin-top: 18px;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.dp-panel-title {
+	margin: 0 0 12px;
+	font-size: 1.02rem;
+}
+
+.dp-list {
+	display: grid;
+	gap: 10px;
+	max-height: 460px;
+	overflow: auto;
+}
+
+.dp-item {
+	border: 1px solid #e2d6c9;
+	border-radius: 12px;
+	background: #fff;
+	padding: 12px;
+}
+
+.dp-item.is-selected {
+	border-color: var(--brand);
+	box-shadow: 0 0 0 3px rgba(13, 92, 99, 0.12);
+}
+
+.dp-item.is-error {
+	border-color: #edb8b1;
+	background: #fff5f4;
+}
+
+.dp-item-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	align-items: baseline;
+}
+
+.dp-chip {
+	display: inline-block;
+	border-radius: 999px;
+	padding: 2px 8px;
+	font-size: 0.76rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+}
+
+.dp-chip-ok {
+	background: #e9f8ef;
+	color: var(--ok);
+}
+
+.dp-chip-warn {
+	background: #fff7e8;
+	color: var(--warn);
+}
+
+.dp-chip-err {
+	background: #fff0ee;
+	color: var(--danger);
+}
+
+.dp-meta {
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 8px;
+	font-size: 0.86rem;
+}
+
+.dp-meta th,
+.dp-meta td {
+	text-align: left;
+	padding: 4px 6px;
+	border-bottom: 1px solid #f0e8de;
+	vertical-align: top;
+}
+
+.dp-meta th {
+	color: var(--ink-soft);
+	width: 38%;
+}
+
+.dp-item-actions {
+	margin-top: 10px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.dp-link-button {
+	border: 1px solid #d5c7b9;
+	border-radius: 8px;
+	padding: 5px 9px;
+	font-size: 0.8rem;
+	color: #3b362f;
+	text-decoration: none;
+	background: #f9f2ea;
+	cursor: pointer;
+}
+
+.dp-link-button:hover {
+	background: #f2e6da;
+}
+
+.dp-muted {
+	color: var(--ink-soft);
+}
+
+.dp-empty {
+	color: var(--ink-soft);
+	font-style: italic;
+}
+
+.dp-confidence {
+	display: inline-block;
+	min-width: 44px;
+	text-align: center;
+	color: #fff;
+	border-radius: 7px;
+	font-size: 0.78rem;
+	padding: 2px 7px;
+}
+
+.dp-clickable {
+	cursor: pointer;
+}
+
+@media (max-width: 1080px) {
+	.dp-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.dp-layout-3 {
+		grid-template-columns: 1fr;
+	}
+
+	.dp-list {
+		max-height: 360px;
+	}
+}
+
+@media (max-width: 680px) {
+	.dp-shell {
+		padding: 16px 12px 26px;
+	}
+
+	.dp-card,
+	.dp-hero {
+		padding: 14px;
+		border-radius: 14px;
+	}
+
+	.dp-form-grid {
+		grid-template-columns: 1fr;
+	}
+}

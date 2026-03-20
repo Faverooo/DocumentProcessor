@@ -1,277 +1,636 @@
-<div class="container mt-5">
-  <div class="row">
-    <div class="col-md-10 offset-md-1">
-      <h1 class="mb-4">Pipeline Asincrona DocumentProcessor</h1>
+<div class="dp-shell">
+  <section class="dp-hero">
+    <h1>DocumentProcessor Dashboard</h1>
+    <p>Upload PDF, split asincrono, estrazione metadata e monitor live in un unico pannello.</p>
+  </section>
 
-      <div class="card">
-        <div class="card-header bg-primary text-white">
-          <h5 class="mb-0">Upload unico: split + processamento automatico</h5>
+  <section class="dp-grid">
+    <article class="dp-card">
+      <h2>Nuovo processo</h2>
+      <p class="dp-small">Avvia una pipeline completa su PDF multi documento. Puoi includere metadati contestuali opzionali.</p>
+
+      <form id="pipelineForm" enctype="multipart/form-data">
+        <div class="dp-form-grid">
+          <div class="dp-field dp-field-full">
+            <label for="pipelineFile">File PDF</label>
+            <input type="file" id="pipelineFile" name="pdf" accept=".pdf,application/pdf" required>
+          </div>
+
+          <div class="dp-field">
+            <label for="categoryInput">Categoria</label>
+            <input id="categoryInput" name="category" type="text" placeholder="es. Cedolini">
+          </div>
+
+          <div class="dp-field">
+            <label for="companyInput">Azienda</label>
+            <input id="companyInput" name="company" type="text" placeholder="es. ACME Srl">
+          </div>
+
+          <div class="dp-field">
+            <label for="departmentInput">Dipartimento</label>
+            <input id="departmentInput" name="department" type="text" placeholder="es. Finance">
+          </div>
+
+          <div class="dp-field">
+            <label for="periodInput">Periodo competenza</label>
+            <input id="periodInput" name="competence_period" type="text" placeholder="es. 2026-03">
+          </div>
         </div>
-        <div class="card-body">
-          <p class="text-muted">
-            Carica un PDF multi-documento. Il backend avvia lo split asincrono, poi processa ogni mini-PDF in job separati,
-            inviando notifiche in tempo reale via WebSocket.
-          </p>
 
-          <form id="pipelineForm" enctype="multipart/form-data">
-            <div class="mb-3">
-              <label for="pipelineFile" class="form-label">Seleziona file PDF</label>
-              <input type="file" class="form-control" id="pipelineFile" name="pdf" accept=".pdf" required>
-            </div>
-            <button type="submit" class="btn btn-primary w-100">Avvia Pipeline</button>
-          </form>
-
-          <div id="pipelineResults" class="mt-4"></div>
-          <div id="documentsList" class="mt-3"></div>
+        <div class="dp-actions">
+          <button type="submit" class="dp-button dp-button-primary">Avvia pipeline</button>
+          <button type="button" class="dp-button dp-button-secondary" id="reloadButton">Ricarica liste</button>
         </div>
+      </form>
+
+      <div id="pipelineStatus" class="dp-status dp-status-info">Pronto: seleziona un PDF per iniziare.</div>
+    </article>
+
+    <article class="dp-card">
+      <h3>Feed eventi</h3>
+      <p class="dp-small">Aggiornamenti realtime dal canale WebSocket della pipeline in esecuzione.</p>
+      <div id="eventStream" class="dp-stream">
+        <div class="dp-empty">Nessun evento disponibile.</div>
       </div>
-    </div>
-  </div>
+    </article>
+  </section>
+
+  <section class="dp-layout-3">
+    <article class="dp-card">
+      <h3 class="dp-panel-title">Upload</h3>
+      <div id="uploadsList" class="dp-list"></div>
+    </article>
+
+    <article class="dp-card">
+      <h3 class="dp-panel-title">Documenti estratti</h3>
+      <div id="documentsList" class="dp-list"></div>
+    </article>
+
+    <article class="dp-card">
+      <h3 class="dp-panel-title">Storico run</h3>
+      <div id="historyList" class="dp-list"></div>
+    </article>
+  </section>
 </div>
 
-<style>
-  .result-section {
-    margin-top: 20px;
-    padding: 15px;
-    border-radius: 5px;
-  }
-
-  .result-success {
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
-    color: #155724;
-  }
-
-  .result-info {
-    background-color: #e7f3ff;
-    border: 1px solid #b9ddff;
-    color: #084b83;
-  }
-
-  .result-error {
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
-    color: #721c24;
-  }
-
-  .doc-row {
-    border: 1px solid #dcdcdc;
-    border-radius: 6px;
-    padding: 12px;
-    margin-bottom: 12px;
-    background: #fff;
-  }
-
-  .doc-row strong {
-    display: block;
-    margin-bottom: 8px;
-    font-size: 1rem;
-  }
-
-  .doc-row-error {
-    border-color: #f5c6cb;
-    background: #fff8f8;
-  }
-
-  .meta-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.88rem;
-    margin-bottom: 8px;
-  }
-
-  .meta-table th, .meta-table td {
-    text-align: left;
-    padding: 4px 8px;
-    border-bottom: 1px solid #eee;
-  }
-
-  .meta-table th {
-    color: #555;
-    font-weight: 600;
-  }
-
-  .conf-badge {
-    display: inline-block;
-    color: #fff;
-    border-radius: 4px;
-    padding: 1px 7px;
-    font-size: 0.82rem;
-    font-weight: 600;
-  }
-
-  .conf-na {
-    color: #aaa;
-    font-size: 0.82rem;
-  }
-
-  .conf-details {
-    margin-top: 6px;
-    font-size: 0.88rem;
-  }
-
-  .conf-details summary {
-    cursor: pointer;
-    color: #0066cc;
-    margin-bottom: 4px;
-  }
-
-  .ocr-pre {
-    background: #f5f5f5;
-    padding: 6px 10px;
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 0.82rem;
-    word-break: break-word;
-  }
-</style>
-
 <script>
-  const form = document.getElementById('pipelineForm');
-  const fileInput = document.getElementById('pipelineFile');
-  const resultsDiv = document.getElementById('pipelineResults');
-  const documentsListDiv = document.getElementById('documentsList');
+  const state = {
+    uploads: [],
+    selectedUploadId: null,
+    selectedUploadedDocumentIdFromQueue: null,
+    activeJobId: null
+  };
 
-  form.addEventListener('submit', async (event) => {
+  const refs = {
+    form: document.getElementById('pipelineForm'),
+    fileInput: document.getElementById('pipelineFile'),
+    categoryInput: document.getElementById('categoryInput'),
+    companyInput: document.getElementById('companyInput'),
+    departmentInput: document.getElementById('departmentInput'),
+    periodInput: document.getElementById('periodInput'),
+    reloadButton: document.getElementById('reloadButton'),
+    status: document.getElementById('pipelineStatus'),
+    uploadsList: document.getElementById('uploadsList'),
+    documentsList: document.getElementById('documentsList'),
+    historyList: document.getElementById('historyList'),
+    eventStream: document.getElementById('eventStream')
+  };
+
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    bindEvents();
+    refreshAll();
+  });
+
+  function bindEvents() {
+    refs.form.addEventListener('submit', startPipeline);
+    refs.reloadButton.addEventListener('click', refreshAll);
+
+    document.addEventListener('click', (event) => {
+      const uploadButton = event.target.closest('[data-upload-id]');
+      if (uploadButton) {
+        const uploadId = Number(uploadButton.dataset.uploadId);
+        if (!Number.isNaN(uploadId)) {
+          selectUpload(uploadId);
+        }
+        return;
+      }
+
+      const actionButton = event.target.closest('[data-action]');
+      if (!actionButton) return;
+
+      const extractedDocumentId = Number(actionButton.dataset.extractedId);
+      if (Number.isNaN(extractedDocumentId)) return;
+
+      if (actionButton.dataset.action === 'edit-recipient') {
+        editRecipient(extractedDocumentId);
+      }
+
+      if (actionButton.dataset.action === 'reassign-range') {
+        reassignRange(extractedDocumentId);
+      }
+    });
+  }
+
+  async function refreshAll() {
+    await loadUploads();
+    if (state.selectedUploadId) {
+      await Promise.all([
+        loadExtractedForUpload(state.selectedUploadId),
+        loadHistoryForUpload(state.selectedUploadId)
+      ]);
+    }
+  }
+
+  async function startPipeline(event) {
     event.preventDefault();
 
-    const selectedFile = fileInput.files[0];
+    const selectedFile = refs.fileInput.files[0];
     if (!selectedFile) {
-      resultsDiv.innerHTML = '<div class="result-section result-error"><strong>Errore:</strong> seleziona un PDF.</div>';
+      setStatus('error', 'Seleziona un PDF prima di avviare la pipeline.');
       return;
     }
 
     const formData = new FormData();
     formData.append('pdf', selectedFile);
+    appendOptionalValue(formData, 'category', refs.categoryInput.value);
+    appendOptionalValue(formData, 'company', refs.companyInput.value);
+    appendOptionalValue(formData, 'department', refs.departmentInput.value);
+    appendOptionalValue(formData, 'competence_period', refs.periodInput.value);
 
-    resultsDiv.innerHTML = '<div class="result-section result-info">Upload in corso...</div>';
-    documentsListDiv.innerHTML = '';
+    setStatus('info', 'Upload in corso...');
+    appendEvent('Invio file al backend...', 'info');
 
     try {
       const response = await fetch('<%= split_documents_path %>', {
         method: 'POST',
         body: formData,
-        headers: {
-          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content
-        }
+        headers: { 'X-CSRF-Token': csrfToken }
       });
 
       const data = await response.json();
 
       if (data.status !== 'queued') {
-        resultsDiv.innerHTML = `<div class="result-section result-error"><strong>Errore:</strong> ${escapeHtml(data.message || 'richiesta non valida')}</div>`;
+        setStatus('error', data.message || 'Richiesta non valida.');
+        appendEvent(`Errore backend: ${data.message || 'richiesta non valida'}`, 'error');
         return;
       }
 
-      resultsDiv.innerHTML = '<div class="result-section result-info">Pipeline avviata. Attendo evento di split...</div>';
+      state.activeJobId = data.job_id;
+      state.selectedUploadedDocumentIdFromQueue = data.uploaded_document_id || null;
+      setStatus('info', `Pipeline in coda. Job: ${data.job_id || 'n/a'}`);
+      appendEvent(`Pipeline avviata, job ${data.job_id || 'n/a'}`, 'success');
       listenToPipelineEvents(data.job_id);
+      await loadUploads();
     } catch (error) {
-      resultsDiv.innerHTML = `<div class="result-section result-error"><strong>Errore:</strong> ${escapeHtml(error.message)}</div>`;
+      setStatus('error', `Errore durante l'upload: ${error.message}`);
+      appendEvent(`Errore client: ${error.message}`, 'error');
     }
-  });
+  }
+
+  function appendOptionalValue(formData, key, value) {
+    if (!value) return;
+    const normalized = String(value).trim();
+    if (!normalized) return;
+    formData.append(key, normalized);
+  }
+
+  function setStatus(type, message) {
+    refs.status.className = `dp-status ${statusClass(type)}`;
+    refs.status.textContent = message;
+  }
+
+  function statusClass(type) {
+    if (type === 'success') return 'dp-status-success';
+    if (type === 'error') return 'dp-status-error';
+    return 'dp-status-info';
+  }
+
+  function appendEvent(text, type) {
+    const placeholder = refs.eventStream.querySelector('.dp-empty');
+    if (placeholder) placeholder.remove();
+
+    const item = document.createElement('div');
+    item.className = 'dp-stream-item';
+    item.innerHTML = `<span class="${chipClass(type)} dp-chip">${type.toUpperCase()}</span> ${escapeHtml(text)} <span class="dp-muted">${formatDate(new Date())}</span>`;
+    refs.eventStream.prepend(item);
+  }
+
+  function chipClass(type) {
+    if (type === 'success') return 'dp-chip-ok';
+    if (type === 'error') return 'dp-chip-err';
+    return 'dp-chip-warn';
+  }
+
+  async function loadUploads() {
+    refs.uploadsList.innerHTML = '<div class="dp-empty">Caricamento upload...</div>';
+    try {
+      const response = await fetch('<%= uploaded_documents_path %>');
+      const data = await response.json();
+      state.uploads = data.uploaded_documents || [];
+
+      if (state.uploads.length === 0) {
+        state.selectedUploadId = null;
+        renderUploads();
+        refs.documentsList.innerHTML = '<div class="dp-empty">Nessun documento estratto.</div>';
+        refs.historyList.innerHTML = '<div class="dp-empty">Nessuna run.</div>';
+        return;
+      }
+
+      if (state.selectedUploadedDocumentIdFromQueue) {
+        const queued = state.uploads.find((upload) => upload.id === state.selectedUploadedDocumentIdFromQueue);
+        if (queued) state.selectedUploadId = queued.id;
+      }
+
+      if (!state.selectedUploadId || !state.uploads.some((upload) => upload.id === state.selectedUploadId)) {
+        state.selectedUploadId = state.uploads[0].id;
+      }
+
+      renderUploads();
+    } catch (_error) {
+      refs.uploadsList.innerHTML = '<div class="dp-empty">Impossibile caricare gli upload.</div>';
+    }
+  }
+
+  function renderUploads() {
+    if (state.uploads.length === 0) {
+      refs.uploadsList.innerHTML = '<div class="dp-empty">Nessun upload disponibile.</div>';
+      return;
+    }
+
+    refs.uploadsList.innerHTML = '';
+    state.uploads.forEach((upload) => {
+      const selected = upload.id === state.selectedUploadId;
+      const wrapper = document.createElement('button');
+      wrapper.type = 'button';
+      wrapper.dataset.uploadId = String(upload.id);
+      wrapper.className = `dp-item dp-clickable ${selected ? 'is-selected' : ''}`;
+      wrapper.innerHTML = `
+        <div class="dp-item-head">
+          <strong>${escapeHtml(upload.original_filename || 'Documento')}</strong>
+          <span class="dp-chip dp-chip-warn">#${upload.id}</span>
+        </div>
+        <div class="dp-small">Pagine: ${escapeHtml(String(upload.page_count || 0))}</div>
+        <div class="dp-small">Creato: ${escapeHtml(formatDate(upload.created_at))}</div>
+      `;
+      refs.uploadsList.appendChild(wrapper);
+    });
+  }
+
+  async function selectUpload(uploadId) {
+    state.selectedUploadId = uploadId;
+    renderUploads();
+    refs.documentsList.innerHTML = '<div class="dp-empty">Caricamento documenti...</div>';
+    refs.historyList.innerHTML = '<div class="dp-empty">Caricamento storico...</div>';
+
+    await Promise.all([
+      loadExtractedForUpload(uploadId),
+      loadHistoryForUpload(uploadId)
+    ]);
+  }
+
+  async function loadExtractedForUpload(uploadedDocumentId) {
+    try {
+      const response = await fetch(`/documents/uploads/${uploadedDocumentId}/extracted`);
+      const data = await response.json();
+      const documents = data.extracted_documents || [];
+
+      if (documents.length === 0) {
+        refs.documentsList.innerHTML = '<div class="dp-empty">Nessun documento estratto per questo upload.</div>';
+        return;
+      }
+
+      refs.documentsList.innerHTML = '';
+      documents.slice().reverse().forEach((documentData) => {
+        refs.documentsList.appendChild(buildExtractedDocumentCard(documentData));
+      });
+    } catch (_error) {
+      refs.documentsList.innerHTML = '<div class="dp-empty">Impossibile caricare gli estratti.</div>';
+    }
+  }
+
+  async function loadHistoryForUpload(uploadedDocumentId) {
+    // Mostra lo storico dei caricamenti tramite DbManager (uploaded_documents_path)
+    try {
+      const response = await fetch('<%= uploaded_documents_path %>');
+      const data = await response.json();
+      const uploads = data.uploaded_documents || [];
+
+      if (uploads.length === 0) {
+        refs.historyList.innerHTML = '<div class="dp-empty">Nessun upload trovato.</div>';
+        return;
+      }
+
+      refs.historyList.innerHTML = '';
+      uploads.forEach((u) => {
+        const el = document.createElement('div');
+        el.className = 'dp-item';
+        el.innerHTML = `
+          <div class="dp-item-head">
+            <strong>${escapeHtml(u.original_filename || 'Documento')}</strong>
+            <span class="dp-chip dp-chip-warn">#${escapeHtml(String(u.id))}</span>
+          </div>
+          <div class="dp-small">Pagine: ${escapeHtml(String(u.page_count || 0))}</div>
+          <div class="dp-small">Creato: ${escapeHtml(formatDate(u.created_at))}</div>
+        `;
+        refs.historyList.appendChild(el);
+      });
+    } catch (_error) {
+      refs.historyList.innerHTML = '<div class="dp-empty">Impossibile caricare lo storico caricamenti.</div>';
+    }
+  }
+
+  function buildExtractedDocumentCard(documentData) {
+    const recipientText = documentData.matched_employee
+      ? `${documentData.matched_employee.name} - ${documentData.matched_employee.email || 'no email'}`
+      : (documentData.recipient_name || 'non risolto');
+
+    const statusText = String(documentData.status || 'unknown');
+    const statusClass = statusText === 'success' ? 'dp-chip-ok' : (statusText === 'error' ? 'dp-chip-err' : 'dp-chip-warn');
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `dp-item ${statusText === 'error' ? 'is-error' : ''}`;
+    wrapper.innerHTML = `
+      <div class="dp-item-head">
+        <strong>Pag ${escapeHtml(String(documentData.page_start))}-${escapeHtml(String(documentData.page_end))}</strong>
+        <span class="dp-chip ${statusClass}">${escapeHtml(statusText)}</span>
+      </div>
+
+      <table class="dp-meta">
+        <tr><th>Destinatario</th><td>${escapeHtml(recipientText)}</td></tr>
+        ${renderMetadataRows(documentData.metadata || {})}
+      </table>
+
+      <details>
+        <summary>Confidenze</summary>
+        <table class="dp-meta">
+          ${renderConfidenceRows((documentData.confidence || {}).global || documentData.confidence || {})}
+        </table>
+      </details>
+
+      <div class="dp-item-actions">
+        <a class="dp-link-button" href="/documents/extracted/${documentData.id}/pdf">Scarica PDF</a>
+        <button type="button" class="dp-link-button" data-action="edit-recipient" data-extracted-id="${documentData.id}">Modifica destinatario</button>
+        <button type="button" class="dp-link-button" data-action="reassign-range" data-extracted-id="${documentData.id}">Riassegna range</button>
+      </div>
+    `;
+
+    return wrapper;
+  }
+
+  function buildHistoryCard(run) {
+    const wrapper = document.createElement('div');
+    const status = String(run.status || 'unknown');
+    const statusClass = status === 'completed' ? 'dp-chip-ok' : (status === 'error' ? 'dp-chip-err' : 'dp-chip-warn');
+    const items = Array.isArray(run.processing_items) ? run.processing_items : [];
+
+    wrapper.className = 'dp-item';
+    wrapper.innerHTML = `
+      <div class="dp-item-head">
+        <strong>Run #${escapeHtml(String(run.id))}</strong>
+        <span class="dp-chip ${statusClass}">${escapeHtml(status)}</span>
+      </div>
+      <div class="dp-small">Job: ${escapeHtml(run.job_id || 'n/a')}</div>
+      <div class="dp-small">Progress: ${escapeHtml(String(run.processed_documents || 0))}/${escapeHtml(String(run.total_documents || 0))}</div>
+      <div class="dp-small">Creata: ${escapeHtml(formatDate(run.created_at))}</div>
+      <div class="dp-small">Completata: ${escapeHtml(formatDate(run.completed_at))}</div>
+      ${run.error_message ? `<div class="dp-small" style="color: var(--danger)">Errore: ${escapeHtml(run.error_message)}</div>` : ''}
+
+      <details>
+        <summary>Item (${items.length})</summary>
+        ${items.length === 0 ? '<div class="dp-empty">Nessun item.</div>' : items.map((item) => {
+          const matched = item.matched_employee ? `${item.matched_employee.name} (${item.matched_employee.email || 'no email'})` : 'no match';
+          return `
+            <div class="dp-item" style="margin-top:8px;padding:8px;">
+              <div><strong>#${escapeHtml(String(item.sequence))}</strong> ${escapeHtml(item.filename || 'n/a')}</div>
+              <div class="dp-small">Stato: ${escapeHtml(item.status || 'n/a')}</div>
+              <div class="dp-small">Destinatario: ${escapeHtml(item.recipient_name || 'n/a')}</div>
+              <div class="dp-small">Match: ${escapeHtml(matched)}</div>
+              ${item.error_message ? `<div class="dp-small" style="color: var(--danger)">Errore: ${escapeHtml(item.error_message)}</div>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </details>
+    `;
+
+    return wrapper;
+  }
+
+  async function editRecipient(extractedDocumentId) {
+    const name = prompt('Nuovo destinatario:');
+    if (!name) return;
+
+    try {
+      const response = await fetch(`/documents/extracted/${extractedDocumentId}/metadata`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ metadata_updates: { recipient_name: name } })
+      });
+
+      let data;
+      try { data = await response.json(); } catch (e) { data = null; }
+
+      if (!response.ok || !data || data.status !== 'ok') {
+        const msg = (data && data.message) || `Server risponde con status ${response.status}`;
+        alert(msg || 'Aggiornamento non riuscito');
+        return;
+      }
+
+      appendEvent(`Destinatario aggiornato per estratto ${extractedDocumentId}`, 'success');
+
+      // Se il server ritorna l'extracted_document aggiornato, usa il suo uploaded_document_id
+      const uploadedId = data.extracted_document && data.extracted_document.uploaded_document_id;
+      if (uploadedId) {
+        state.selectedUploadId = uploadedId;
+        await Promise.all([
+          loadExtractedForUpload(uploadedId),
+          loadHistoryForUpload(uploadedId)
+        ]);
+        return;
+      }
+
+      // Fallback: ricarica l'upload selezionato correntemente se esiste
+      if (state.selectedUploadId) {
+        await Promise.all([
+          loadExtractedForUpload(state.selectedUploadId),
+          loadHistoryForUpload(state.selectedUploadId)
+        ]);
+      }
+    } catch (error) {
+      alert(`Errore durante il salvataggio: ${error.message}`);
+    }
+  }
+
+  async function reassignRange(extractedDocumentId) {
+    const input = prompt('Inserisci nuovo range (esempio: 2-5)');
+    if (!input) return;
+
+    const match = input.trim().match(/^(\d+)\s*[-:]\s*(\d+)$/);
+    if (!match) {
+      alert('Range non valido. Usa il formato 2-5.');
+      return;
+    }
+
+    const pageStart = Number(match[1]);
+    const pageEnd = Number(match[2]);
+
+    try {
+      const response = await fetch(`/documents/extracted/${extractedDocumentId}/reassign_range`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ page_start: pageStart, page_end: pageEnd })
+      });
+
+      const data = await response.json();
+      if (data.status !== 'queued') {
+        alert(data.message || 'Riassegnazione non riuscita');
+        return;
+      }
+
+      appendEvent(`Riassegnazione in coda per estratto ${extractedDocumentId}`, 'info');
+      if (state.selectedUploadId) {
+        await Promise.all([
+          loadExtractedForUpload(state.selectedUploadId),
+          loadHistoryForUpload(state.selectedUploadId)
+        ]);
+      }
+    } catch (error) {
+      alert(`Errore durante la riassegnazione: ${error.message}`);
+    }
+  }
 
   function listenToPipelineEvents(jobId) {
-    subscribeToJob(jobId, (message, unsubscribe) => {
+    if (!jobId) return;
+
+    subscribeToJob(jobId, async (message, unsubscribe) => {
       if (message.event === 'split_completed') {
         if (message.status === 'error') {
-          resultsDiv.innerHTML = `<div class="result-section result-error"><strong>Split fallito:</strong> ${escapeHtml(message.message || 'errore sconosciuto')}</div>`;
+          setStatus('error', message.message || 'Split fallito');
+          appendEvent(`Split fallito: ${message.message || 'errore sconosciuto'}`, 'error');
           unsubscribe();
           return;
         }
 
-        resultsDiv.innerHTML = `
-          <div class="result-section result-success">
-            <strong>Split completato</strong>
-            <div>Pagine originali: ${message.original_pages}</div>
-            <div>Documenti generati: ${message.mini_pdfs_count}</div>
-          </div>
-          <div class="result-section result-info">Processamento destinatari in corso...</div>
-        `;
+        setStatus('success', `Split completato: ${message.mini_pdfs_count || 0} documenti`);
+        appendEvent(`Split completato: ${message.mini_pdfs_count || 0} documenti generati`, 'success');
         return;
       }
 
       if (message.event === 'document_processed') {
-        appendDocumentRow(message);
+        appendDocumentFromEvent(message);
         return;
       }
 
       if (message.event === 'processing_completed') {
-        resultsDiv.innerHTML += `
-          <div class="result-section result-success">
-            <strong>Pipeline terminata</strong>
-          </div>
-        `;
+        setStatus('success', 'Pipeline completata.');
+        appendEvent('Processing completato', 'success');
         unsubscribe();
+        await refreshAll();
       }
-    }, (errorMessage) => {
-      resultsDiv.innerHTML = `<div class="result-section result-error"><strong>Errore WebSocket:</strong> ${escapeHtml(errorMessage)}</div>`;
+    }, (errorText) => {
+      setStatus('error', `WebSocket non disponibile: ${errorText}`);
+      appendEvent(`WebSocket errore: ${errorText}`, 'error');
     });
   }
 
-  function appendDocumentRow(message) {
-    const statusLabel = message.status === 'success' ? 'OK' : 'ERRORE';
+  function appendDocumentFromEvent(message) {
+    const status = message.status === 'success' ? 'success' : 'error';
+    appendEvent(`Documento ${message.filename || 'n/a'}: ${message.status || 'unknown'}`, status);
 
-    let body;
-    if (message.status !== 'success') {
-      body = `<div class="text-danger">Messaggio: ${escapeHtml(message.message || 'errore sconosciuto')}</div>`;
-    } else {
-      const rec = message.matched_recipient;
-      const destinationText = rec
-        ? `${rec.name} — ${rec.email || 'no email'} (${rec.employee_code || 'no codice'})`
-        : (message.fallback_text ? `Nessun match DB — fallback: ${message.fallback_text.substring(0, 120)}` : 'Nessun destinatario estratto');
-
-      const meta  = message.extracted_document_data || {};
-      const conf  = message.extracted_confidence   || {};
-      const glob  = conf.global   || {};
-
-      const confBar = (val) => {
-        const safeVal = val == null ? 0 : Number(val);
-        const pct = Math.round(safeVal * 100);
-        const color = pct >= 80 ? '#28a745' : pct >= 50 ? '#ffc107' : '#dc3545';
-        return `<span class="conf-badge" style="background:${color}">${pct}%</span>`;
-      };
-
-      const confRow = (label, field) => `
-        <tr>
-          <td>${label}</td>
-          <td>${confBar(glob[field])}</td>
-        </tr>`;
-
-      body = `
-        <table class="meta-table">
-          <tr><th>Campo</th><th>Valore estratto</th></tr>
-          <tr><td>Destinatario</td><td>${escapeHtml(destinationText)}</td></tr>
-          <tr><td>Data</td><td>${escapeHtml(meta.date || '—')}</td></tr>
-          <tr><td>Azienda</td><td>${escapeHtml(meta.company || '—')}</td></tr>
-          <tr><td>Reparto</td><td>${escapeHtml(meta.department || '—')}</td></tr>
-        </table>
-
-        <details class="conf-details">
-          <summary>Confidenza globale</summary>
-          <table class="meta-table">
-            <tr><th>Campo</th><th>Globale</th></tr>
-            ${confRow('Destinatario', 'recipient')}
-            ${confRow('Data',         'date')}
-            ${confRow('Azienda',      'company')}
-            ${confRow('Reparto',      'department')}
-          </table>
-        </details>
-
-        <details class="conf-details">
-          <summary>Nomi grezzi estratti dal LLM</summary>
-          <div class="ocr-pre">${(message.extracted_names || []).map(escapeHtml).join(', ') || 'nessuno'}</div>
-        </details>
-      `;
-    }
-
-    const row = document.createElement('div');
-    row.className = `doc-row ${message.status === 'success' ? '' : 'doc-row-error'}`;
-    row.innerHTML = `
-      <strong>[${statusLabel}] ${escapeHtml(message.filename || 'N/A')}</strong>
-      ${body}
+    const card = document.createElement('div');
+    card.className = `dp-item ${message.status === 'success' ? '' : 'is-error'}`;
+    card.innerHTML = `
+      <div class="dp-item-head">
+        <strong>${escapeHtml(message.filename || 'Documento')}</strong>
+        <span class="dp-chip ${message.status === 'success' ? 'dp-chip-ok' : 'dp-chip-err'}">${escapeHtml(message.status || 'unknown')}</span>
+      </div>
+      ${message.status === 'success' ? buildEventSuccessBody(message) : `<div class="dp-small" style="color: var(--danger)">${escapeHtml(message.message || 'Errore sconosciuto')}</div>`}
+      <div class="dp-item-actions">
+        ${message.extracted_document_id ? `<button type="button" class="dp-link-button" data-action="edit-recipient" data-extracted-id="${message.extracted_document_id}">Modifica destinatario</button>` : ''}
+      </div>
     `;
 
-    documentsListDiv.prepend(row);
+    if (refs.documentsList.querySelector('.dp-empty')) {
+      refs.documentsList.innerHTML = '';
+    }
+    refs.documentsList.prepend(card);
+  }
+
+  function buildEventSuccessBody(message) {
+    const recipient = message.matched_recipient
+      ? `${message.matched_recipient.name} - ${message.matched_recipient.email || 'no email'}`
+      : (message.fallback_text || 'Nessun destinatario estratto');
+
+    return `
+      <table class="dp-meta">
+        <tr><th>Destinatario</th><td>${escapeHtml(recipient)}</td></tr>
+        ${renderMetadataRows(message.extracted_document_data || {})}
+      </table>
+      <details>
+        <summary>Confidenze</summary>
+        <table class="dp-meta">
+          ${renderConfidenceRows((message.extracted_confidence || {}).global || message.extracted_confidence || {})}
+        </table>
+      </details>
+    `;
+  }
+
+  function renderMetadataRows(metadata) {
+    const entries = Object.entries(metadata || {});
+    if (entries.length === 0) {
+      return '<tr><th>Metadata</th><td class="dp-muted">Nessun metadato</td></tr>';
+    }
+
+    return entries.map(([key, value]) => {
+      const valueText = value == null ? '-' : String(value);
+      return `<tr><th>${escapeHtml(formatLabel(key))}</th><td>${escapeHtml(valueText)}</td></tr>`;
+    }).join('');
+  }
+
+  function renderConfidenceRows(confidenceMap) {
+    const entries = Object.entries(confidenceMap || {});
+    if (entries.length === 0) {
+      return '<tr><th>Confidenza</th><td class="dp-muted">Nessuna confidenza</td></tr>';
+    }
+
+    return entries.map(([key, value]) => {
+      return `<tr><th>${escapeHtml(formatLabel(key))}</th><td>${renderConfidenceBadge(value)}</td></tr>`;
+    }).join('');
+  }
+
+  function renderConfidenceBadge(raw) {
+    const normalized = normalizeConfidence(raw);
+    const percentage = Math.round(normalized * 100);
+    const color = percentage >= 80 ? '#1f8a4c' : (percentage >= 50 ? '#b87400' : '#b42318');
+    return `<span class="dp-confidence" style="background:${color}">${percentage}%</span>`;
+  }
+
+  function normalizeConfidence(raw) {
+    if (raw == null) return 0;
+    const numeric = Number(raw);
+    if (Number.isNaN(numeric)) return 0;
+    if (numeric > 1) return Math.max(0, Math.min(1, numeric / 100));
+    return Math.max(0, Math.min(1, numeric));
+  }
+
+  function formatLabel(value) {
+    return String(value || '')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  function formatDate(value) {
+    if (!value) return '-';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString();
   }
 
   function subscribeToJob(jobId, onData, onError) {
@@ -309,13 +668,13 @@
     });
 
     socket.addEventListener('error', () => {
-      onError('Connessione WebSocket non disponibile');
+      onError('Connessione non disponibile');
     });
   }
 
   function escapeHtml(value) {
-    const div = document.createElement('div');
-    div.textContent = value || '';
-    return div.innerHTML;
+    const element = document.createElement('div');
+    element.textContent = value == null ? '' : String(value);
+    return element.innerHTML;
   }
 </script>

@@ -1,8 +1,8 @@
 require "test_helper"
 
-class DocumentRecipientResolverServiceTest < ActiveSupport::TestCase
+class DocumentProcessingRecipientResolverTest < ActiveSupport::TestCase
   setup do
-    @service = DocumentRecipientResolverService.new
+    @service = DocumentProcessing::RecipientResolver.new
   end
 
   def resolve_result(recipient_names:, raw_text: nil, service: @service)
@@ -158,14 +158,14 @@ class DocumentRecipientResolverServiceTest < ActiveSupport::TestCase
   end
 
   test "soglia personalizzata piu' bassa accetta match meno precisi" do
-    service_permissivo = DocumentRecipientResolverService.new(threshold: 0.50)
+    service_permissivo = DocumentProcessing::RecipientResolver.new(threshold: 0.50)
     result = resolve_result(recipient_names: ["M. Rossi"], service: service_permissivo)
     assert result.matched?
     assert_kind_of Employee, result.employee
   end
 
   test "soglia personalizzata molto alta rifiuta match parziali" do
-    service_severo = DocumentRecipientResolverService.new(threshold: 0.99)
+    service_severo = DocumentProcessing::RecipientResolver.new(threshold: 0.99)
     result = resolve_result(recipient_names: ["Maria Rossi"], service: service_severo)
     # Con soglia 0.99 un typo non deve passare
     refute_equal employees(:mario_rossi), result.employee

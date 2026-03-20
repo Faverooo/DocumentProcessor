@@ -5,20 +5,15 @@ module DocumentProcessing
     end
 
     def call(file_path:, job_id:)
-      run = ProcessingRun.find_by!(job_id: job_id)
-      run.update!(status: "splitting", started_at: Time.current)
+      run = split_run_repository.find_run_by_job_id!(job_id)
+      split_run_repository.mark_splitting!(run)
 
       pdf = CombinePDF.load(file_path)
       split_results = container.pdf_splitter(pdf: pdf).split
 
       create_processing_items_and_enqueue(split_results, run)
 
-      run.update!(
-        status: split_results.empty? ? "completed" : "processing",
-        total_documents: split_results.size,
-        processed_documents: 0,
-        completed_at: (split_results.empty? ? Time.current : nil)
-      )
+      split_run_repository.mark_post_split_state!(run:, split_count: split_results.size)
 
       notifier.broadcast(
         job_id,
@@ -37,7 +32,7 @@ module DocumentProcessing
         status: "success"
       )
     rescue StandardError => e
-      run&.update(status: "failed", error_message: e.message, completed_at: Time.current)
+      split_run_repository.mark_failed(run:, error_message: e.message)
       notifier.broadcast(job_id, event: "split_completed", status: "error", message: e.message)
     ensure
       cleanup_source_pdf(file_path, run)
@@ -52,48 +47,39 @@ module DocumentProcessing
     end
 
     def create_processing_items_and_enqueue(split_results, run)
-      ProcessingRun.transaction do
-        split_results.each_with_index do |result, index|
-          range = result[:range]
-          mini_pdf_path = result[:path]
+      created_artifacts = split_run_repository.create_split_artifacts!(run:, split_results:)
 
-          extracted_document = run.uploaded_document&.extracted_documents&.create!(
-            sequence: index + 1,
-            page_start: range[:start] + 1,
-            page_end: range[:end] + 1,
-            status: "queued"
-          )
-
-          item = run.processing_items.create!(
-            sequence: index + 1,
-            filename: File.basename(mini_pdf_path),
-            status: "queued",
-            extracted_document: extracted_document
-          )
-
-          data_extraction_job_class.perform_later(
-            mini_pdf_path,
-            {
-              job_id: run.job_id,
-              processing_item_id: item.id,
-              extracted_document_id: extracted_document&.id
-            }
-          )
-        end
+      created_artifacts.each do |artifact|
+        data_extraction_job_class.perform_later(
+          artifact[:path],
+          {
+            job_id: run.job_id,
+            processing_item_id: artifact[:processing_item_id],
+            extracted_document_id: artifact[:extracted_document_id]
+          }
+        )
       end
     end
 
     def cleanup_source_pdf(file_path, run)
-      return unless file_path.present? && File.exist?(file_path)
+      return unless file_path.present? && file_storage.exist?(file_path)
 
-      source_path = run&.uploaded_document&.storage_path
-      return if source_path.present? && File.expand_path(source_path) == File.expand_path(file_path)
+      source_path = split_run_repository.uploaded_source_path_for(run)
+      return if source_path.present? && file_storage.expanded(source_path) == file_storage.expanded(file_path)
 
-      File.delete(file_path)
+      file_storage.delete(file_path)
     end
 
     def data_extraction_job_class
       DataExtractionJob
+    end
+
+    def split_run_repository
+      container.split_run_repository
+    end
+
+    def file_storage
+      container.file_storage
     end
   end
 end

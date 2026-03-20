@@ -1,6 +1,6 @@
 require "test_helper"
 
-class DocumentDataExtractorServiceTest < ActiveSupport::TestCase
+class DocumentProcessingDataExtractorTest < ActiveSupport::TestCase
   def mock_bedrock(response_text)
     content_item = Struct.new(:text).new(response_text)
     message = Struct.new(:content).new([content_item])
@@ -24,23 +24,23 @@ class DocumentDataExtractorServiceTest < ActiveSupport::TestCase
   end
 
   test "rimuove duplicati (testa .uniq)" do
-    service = DocumentDataExtractorService.new(bedrock_client: mock_bedrock('{"recipients":[{"name":"Mario Rossi"},{"name":"Mario Rossi"}]}'))
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: mock_bedrock('{"recipients":[{"name":"Mario Rossi"},{"name":"Mario Rossi"}]}'))
     assert_equal ["Mario Rossi"], service.extract("testo documento")[:recipients]
   end
 
   test "ignora nomi troppo corti - normalize_name scarta < 3 caratteri" do
-    service = DocumentDataExtractorService.new(bedrock_client: mock_bedrock('{"recipients":[{"name":"A"},{"name":"Mario Rossi"}]}'))
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: mock_bedrock('{"recipients":[{"name":"A"},{"name":"Mario Rossi"}]}'))
     assert_equal ["Mario Rossi"], service.extract("testo documento")[:recipients]
   end
 
   test "normalizza spazi multipli - normalize_name pulisce il nome" do
-    service = DocumentDataExtractorService.new(bedrock_client: mock_bedrock('{"recipients":[{"name":"Mario   Rossi"}]}'))
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: mock_bedrock('{"recipients":[{"name":"Mario   Rossi"}]}'))
     assert_equal ["Mario Rossi"], service.extract("testo documento")[:recipients]
   end
 
   test "estrae anche data, azienda e reparto" do
     response = '{"recipients":[{"name":"Mario Rossi"}],"document":{"date":"2026-03-16","company":"ACME S.p.A.","department":"Risorse Umane"}}'
-    service = DocumentDataExtractorService.new(bedrock_client: mock_bedrock(response))
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: mock_bedrock(response))
 
     result = service.extract("testo documento")
 
@@ -51,7 +51,7 @@ class DocumentDataExtractorServiceTest < ActiveSupport::TestCase
   end
 
   test "ritorna struttura vuota se il testo in input e' vuoto" do
-    service = DocumentDataExtractorService.new(bedrock_client: uncalled_bedrock)
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: uncalled_bedrock)
     assert_equal [], service.extract("")[:recipients]
     assert_equal [], service.extract(nil)[:recipients]
     assert_equal [], service.extract("   ")[:recipients]
@@ -64,23 +64,23 @@ class DocumentDataExtractorServiceTest < ActiveSupport::TestCase
       Spero di aver risposto correttamente.
     TXT
 
-    service = DocumentDataExtractorService.new(bedrock_client: mock_bedrock(risposta_con_testo))
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: mock_bedrock(risposta_con_testo))
     assert_equal ["Mario Rossi"], service.extract("testo documento")[:recipients]
   end
 
   test "ritorna struttura vuota se il client Bedrock solleva un'eccezione" do
     errore = Aws::BedrockRuntime::Errors::ServiceError.new(nil, "timeout")
-    service = DocumentDataExtractorService.new(bedrock_client: failing_bedrock(errore))
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: failing_bedrock(errore))
     assert_equal [], service.extract("testo documento")[:recipients]
   end
 
   test "ritorna struttura vuota se la risposta llm non contiene JSON valido" do
-    service = DocumentDataExtractorService.new(bedrock_client: mock_bedrock("risposta senza json"))
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: mock_bedrock("risposta senza json"))
     assert_equal [], service.extract("testo documento")[:recipients]
   end
 
   test "ritorna struttura vuota se la risposta llm e' JSON malformato" do
-    service = DocumentDataExtractorService.new(bedrock_client: mock_bedrock("{recipients: broken"))
+    service = DocumentProcessing::DataExtractor.new(bedrock_client: mock_bedrock("{recipients: broken"))
     assert_equal [], service.extract("testo documento")[:recipients]
   end
 end

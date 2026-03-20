@@ -12,13 +12,13 @@ Rails.application.routes.draw do
   # Test servizi
   get "/documents/test", to: "documents#test", as: :test_documents
   post "/documents/split", to: "documents#split", as: :split_documents
-  # legacy route (old UI / docs) - kept for backward compatibility
-  post "/documents/test_split", to: "documents#split"
   post "/documents/test_data", to: "documents#test_data", as: :test_data_documents
   get "/documents/uploads/:uploaded_document_id/extracted", to: "documents#extracted_index", as: :uploaded_document_extracted_documents
+  get "/documents/uploads", to: "documents#uploads", as: :uploaded_documents
   get "/documents/extracted/:id", to: "documents#extracted_show", as: :extracted_document
   get "/documents/extracted/:id/pdf", to: "documents#extracted_pdf", as: :extracted_pdf_document
   patch "/documents/extracted/:id/reassign_range", to: "documents#reassign_range", as: :reassign_extracted_document_range
+  patch "/documents/extracted/:id/metadata", to: "documents#update_metadata", as: :update_extracted_document_metadata
 
   # Defines the root path route ("/")
   root "documents#test"

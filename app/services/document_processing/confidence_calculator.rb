@@ -39,8 +39,7 @@ module DocumentProcessing
         recipient: confidence_for_values(ocr_lines, recipient_names),
         date: confidence_for_values(ocr_lines, date_candidates(metadata[:date])),
         company: confidence_for_values(ocr_lines, [metadata[:company]]),
-        department: confidence_for_values(ocr_lines, [metadata[:department]])
-        ,
+        department: confidence_for_values(ocr_lines, [metadata[:department]]),
         reason: confidence_for_values(ocr_lines, [metadata[:reason]]),
         competence: confidence_for_values(ocr_lines, [metadata[:competence]])
       }
