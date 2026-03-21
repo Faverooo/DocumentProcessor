@@ -21,6 +21,8 @@ module DocumentProcessing
 
       extracted_data = container.data_extractor.extract(full_text)
       recipient_names = extracted_data[:recipients]
+      # Normalize to single recipient: take first extracted name if any
+      recipient = Array(recipient_names).compact.first
       extracted_document_data = extracted_data[:metadata]
       llm_confidence = extracted_data[:llm_confidence]
       final_global_confidence = container.confidence_calculator(
@@ -35,7 +37,7 @@ module DocumentProcessing
 
       data_item_repository.mark_item_done!(item:, resolution:)
       duration = Time.now - start_time
-      update_extracted_document_success(extracted_document, resolution, extracted_document_data, recipient_names, final_global_confidence, duration)
+      update_extracted_document_success(extracted_document, resolution, extracted_document_data, recipient, final_global_confidence, duration)
 
       if job_id.present?
         notifier.broadcast(
@@ -44,11 +46,10 @@ module DocumentProcessing
           status: "success",
           filename: File.basename(file_path),
           ocr_text: full_text,
-          extracted_names: recipient_names,
+          recipient: recipient,
           extracted_document_data: extracted_document_data,
           extracted_confidence: final_global_confidence,
           matched_recipient: format_employee(resolution.employee),
-          fallback_text: resolution.unmatched? ? resolution.fallback_text : nil,
           extracted_document_id: extracted_document&.id
         )
       end
@@ -86,7 +87,7 @@ module DocumentProcessing
       item.extracted_document
     end
 
-    def update_extracted_document_success(extracted_document, resolution, metadata, recipients, global_confidence, process_duration_seconds)
+    def update_extracted_document_success(extracted_document, resolution, metadata, recipient, global_confidence, process_duration_seconds)
       return unless extracted_document
 
       uploaded_document = extracted_document.uploaded_document
@@ -96,7 +97,7 @@ module DocumentProcessing
         extracted_document: extracted_document,
         resolution: resolution,
         metadata: metadata_builder.build,
-        recipients: recipients,
+        recipient: recipient,
         global_confidence: global_confidence,
         process_duration_seconds: process_duration_seconds
       )

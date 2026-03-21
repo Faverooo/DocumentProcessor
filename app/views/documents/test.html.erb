@@ -342,9 +342,9 @@
   }
 
   function buildExtractedDocumentCard(documentData) {
-    const recipientText = documentData.matched_employee
-      ? `${documentData.matched_employee.name} - ${documentData.matched_employee.email || 'no email'}`
-      : (documentData.recipient_name || 'non risolto');
+      const recipientText = documentData.matched_employee
+        ? `${documentData.matched_employee.name} - ${documentData.matched_employee.email || 'no email'}`
+        : (documentData.recipient || 'non risolto');
 
     const statusText = String(documentData.status || 'unknown');
     const statusClass = statusText === 'success' ? 'dp-chip-ok' : (statusText === 'error' ? 'dp-chip-err' : 'dp-chip-warn');
@@ -405,7 +405,7 @@
             <div class="dp-item" style="margin-top:8px;padding:8px;">
               <div><strong>#${escapeHtml(String(item.sequence))}</strong> ${escapeHtml(item.filename || 'n/a')}</div>
               <div class="dp-small">Stato: ${escapeHtml(item.status || 'n/a')}</div>
-              <div class="dp-small">Destinatario: ${escapeHtml(item.recipient_name || 'n/a')}</div>
+              <div class="dp-small">Destinatario: ${escapeHtml(item.recipient || 'n/a')}</div>
               <div class="dp-small">Match: ${escapeHtml(matched)}</div>
               ${item.error_message ? `<div class="dp-small" style="color: var(--danger)">Errore: ${escapeHtml(item.error_message)}</div>` : ''}
             </div>
@@ -428,7 +428,7 @@
           'Content-Type': 'application/json',
           'X-CSRF-Token': csrfToken
         },
-        body: JSON.stringify({ metadata_updates: { recipient_name: name } })
+        body: JSON.stringify({ metadata_updates: { recipient: name } })
       });
 
       let data;
@@ -566,7 +566,7 @@
   function buildEventSuccessBody(message) {
     const recipient = message.matched_recipient
       ? `${message.matched_recipient.name} - ${message.matched_recipient.email || 'no email'}`
-      : (message.fallback_text || 'Nessun destinatario estratto');
+      : (message.recipient || 'Nessun destinatario estratto');
 
     return `
       <table class="dp-meta">

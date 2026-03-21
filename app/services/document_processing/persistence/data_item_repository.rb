@@ -34,7 +34,6 @@ module DocumentProcessing
       def mark_item_done!(item:, resolution:)
         item&.update!(
           status: "done",
-          recipient_name: resolution.matched? ? resolution.employee.name : nil,
           matched_employee: resolution.matched? ? resolution.employee : nil,
           error_message: nil
         )
@@ -57,7 +56,7 @@ module DocumentProcessing
         extracted_document:,
         resolution:,
         metadata:,
-        recipients:,
+        recipient:,
         global_confidence:,
         process_duration_seconds:
       )
@@ -66,11 +65,9 @@ module DocumentProcessing
         extracted_document.update!(
           status: "done",
           metadata: metadata,
-          recipients: recipients,
-          fallback_text: resolution&.fallback_text,
+          recipient: recipient,
           confidence: global_confidence,
           process_time_seconds: process_duration_seconds.to_f,
-          recipient_name: resolution.matched? ? resolution.employee.name : nil,
           matched_employee: resolution.matched? ? resolution.employee : nil,
           error_message: nil,
           processed_at: Time.current

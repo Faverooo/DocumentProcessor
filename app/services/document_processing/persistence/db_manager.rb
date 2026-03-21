@@ -34,20 +34,23 @@ module DocumentProcessing
           end
 
           # Re-resolve recipient if the metadata update contains recipient-related fields
-          recipient_names = if new_meta.key?("recipients") && new_meta["recipients"].is_a?(Array)
-            new_meta["recipients"]
-          elsif new_meta.key?("recipient_name") || new_meta.key?("recipient")
-            [new_meta["recipient_name"] || new_meta["recipient"]].compact
+          # Decide single recipient: prefer explicit `raw_recipient` or `recipient` in metadata, otherwise first element of `recipients`
+          recipient = if new_meta.key?("raw_recipient") && new_meta["raw_recipient"].present?
+            new_meta["raw_recipient"].to_s
+          elsif new_meta.key?("recipient") && new_meta["recipient"].present?
+            new_meta["recipient"].to_s
+          elsif new_meta.key?("recipients") && new_meta["recipients"].is_a?(Array) && new_meta["recipients"].any?
+            new_meta["recipients"].first.to_s
           else
-            extracted.recipients
+            extracted.respond_to?(:recipient) ? extracted.recipient : (extracted.recipients.is_a?(Array) ? extracted.recipients.first : nil)
           end
 
-          resolution = @recipient_resolver.resolve(recipient_names: recipient_names, raw_text: nil)
+          resolution = @recipient_resolver.resolve(recipient_names: [recipient].compact, raw_text: nil)
 
           extracted.update!(
             metadata: new_meta,
             confidence: current_conf,
-            recipient_name: resolution.matched? ? resolution.employee.name : resolution.fallback_text,
+            recipient: recipient,
             matched_employee: resolution.matched? ? resolution.employee : nil
           )
         end

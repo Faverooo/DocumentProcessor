@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_18_143000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_21_121000) do
   create_table "employees", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email"
@@ -23,15 +23,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_18_143000) do
     t.json "confidence", default: {}, null: false
     t.datetime "created_at", null: false
     t.text "error_message"
-    t.text "fallback_text"
     t.integer "matched_employee_id"
     t.json "metadata", default: {}, null: false
     t.integer "page_end", null: false
     t.integer "page_start", null: false
     t.float "process_time_seconds"
     t.datetime "processed_at"
-    t.string "recipient_name"
-    t.json "recipients", default: [], null: false
+    t.string "recipient"
     t.integer "sequence", null: false
     t.string "status", default: "queued", null: false
     t.datetime "updated_at", null: false
@@ -49,7 +47,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_18_143000) do
     t.string "filename", null: false
     t.integer "matched_employee_id"
     t.integer "processing_run_id", null: false
-    t.string "recipient_name"
     t.integer "sequence", null: false
     t.string "status", default: "queued", null: false
     t.datetime "updated_at", null: false

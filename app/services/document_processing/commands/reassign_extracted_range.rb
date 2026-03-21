@@ -29,9 +29,8 @@ module DocumentProcessing
           status: "queued",
           metadata: {},
           recipients: [],
-          fallback_text: nil,
+          recipient: nil,
           confidence: {},
-          recipient_name: nil,
           matched_employee: nil,
           error_message: nil,
           processed_at: nil
