@@ -6,18 +6,26 @@ class SendingsControllerTest < ActionDispatch::IntegrationTest
     ud = UploadedDocument.create!(original_filename: "a.pdf", storage_path: "/tmp/a", page_count: 1, checksum: "ch10")
     ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
 
-    post "/sendings", params: { extracted_document_id: ed.id, recipient_id: recipient.id, sent_at: Time.current.iso8601, subject: "Cedolino Marzo" }
+    post "/sendings", params: {
+      extracted_document_id: ed.id,
+      recipient_id: recipient.id,
+      sent_at: Time.current.iso8601,
+      subject: "Cedolino Marzo",
+      body: "Contenuto scritto manualmente"
+    }
     assert_response :created
     body = JSON.parse(response.body)
     assert_equal "ok", body["status"]
     assert body["sending"]
     assert_equal "Cedolino Marzo", body["sending"]["subject"]
+    assert_equal "Contenuto scritto manualmente", body["sending"]["body"]
 
     get "/sendings"
     assert_response :success
     list = JSON.parse(response.body)
     assert list["sendings"].is_a?(Array)
     assert_equal 1, list["sendings"].length
+    assert_equal "Contenuto scritto manualmente", list["sendings"][0]["body"]
   end
 
   test "fails to create sending with missing params" do

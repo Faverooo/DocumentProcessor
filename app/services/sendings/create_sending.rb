@@ -2,11 +2,12 @@ module Sendings
   class CreateSending
     attr_reader :result
 
-    def initialize(extracted_document_id:, recipient_id:, sent_at:, subject: nil, template_id: nil)
+    def initialize(extracted_document_id:, recipient_id:, sent_at:, subject: nil, body: nil, template_id: nil)
       @extracted_document_id = extracted_document_id
       @recipient_id = recipient_id
       @sent_at = sent_at
       @subject = subject
+      @body = body
       @template_id = template_id
       @result = {}
     end
@@ -39,13 +40,15 @@ module Sendings
         recipient_id: @recipient_id,
         sent_at: @sent_at,
         subject: @subject,
+        body: @body,
         template_id: @template_id
       )
 
-      # Inherit subject from template if not provided and template_id is present
+      # If a template is selected and explicit values are missing, inherit them.
       if sending.template_id.present? && sending.subject.blank?
         template = Template.find_by(id: sending.template_id)
         sending.subject = template.subject if template
+        sending.body = template.body if template && sending.body.blank?
       end
 
       sending

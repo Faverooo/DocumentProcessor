@@ -17,6 +17,23 @@ class Sendings::CreateSendingTest < ActiveSupport::TestCase
     assert_equal "Test Subject", result.result[:sending].subject
   end
 
+  test "creates sending successfully with custom body" do
+    recipient = Employee.create!(name: "Mario", email: "mario-body@x.it", employee_code: "M1B")
+    ud = UploadedDocument.create!(original_filename: "ab.pdf", storage_path: "/tmp/ab", page_count: 1, checksum: "ch20b")
+    ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
+
+    result = Sendings::CreateSending.new(
+      extracted_document_id: ed.id,
+      recipient_id: recipient.id,
+      sent_at: Time.current,
+      subject: "Test Subject",
+      body: "Testo custom inviato manualmente"
+    ).call
+
+    assert result.success?
+    assert_equal "Testo custom inviato manualmente", result.result[:sending].body
+  end
+
   test "creates sending and inherits subject from template" do
     recipient = Employee.create!(name: "Mario", email: "mario@x.it", employee_code: "M2")
     ud = UploadedDocument.create!(original_filename: "b.pdf", storage_path: "/tmp/b", page_count: 1, checksum: "ch21")
@@ -32,6 +49,7 @@ class Sendings::CreateSendingTest < ActiveSupport::TestCase
 
     assert result.success?
     assert_equal "Template Subject", result.result[:sending].subject
+    assert_equal "Template body", result.result[:sending].body
   end
 
   test "fails with missing extracted_document_id" do

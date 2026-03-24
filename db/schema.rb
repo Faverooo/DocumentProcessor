@@ -75,6 +75,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_123000) do
   end
 
   create_table "sendings", force: :cascade do |t|
+    t.text "body"
     t.datetime "created_at", null: false
     t.integer "extracted_document_id", null: false
     t.integer "recipient_id", null: false

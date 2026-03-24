@@ -152,13 +152,14 @@
     // Carica templates e offri la possibilità di usarne uno
     let chosenTemplateId = null;
     let subjectInput = '';
+    let bodyInput = '';
     try {
       const tplRes = await fetch('/templates');
       if (tplRes.ok) {
         const tplData = await tplRes.json();
         const tplList = tplData.templates || [];
         if (tplList.length > 0) {
-          let menu = 'Usare un template? Digita "t<ID>" (es. t1) oppure scrivi direttamente l\'oggetto. Template disponibili:\n';
+          let menu = 'Usare un template? Digita "t<ID>" (es. t1) oppure lascia vuoto per testo libero. Template disponibili:\n';
           tplList.forEach((t) => { menu += `${t.id}: ${t.subject}\n`; });
           const choice = prompt(menu, '');
           if (choice === null) return; // annulla
@@ -166,22 +167,34 @@
           if (trimmed.toLowerCase().startsWith('t')) {
             const num = parseInt(trimmed.slice(1), 10);
             if (!Number.isNaN(num)) chosenTemplateId = num;
-          } else {
+          } else if (trimmed !== '') {
             subjectInput = trimmed;
+            bodyInput = prompt('Testo invio:', '') || '';
+            if (bodyInput === null) return;
+          } else {
+            subjectInput = prompt('Oggetto invio (opzionale):', '') || '';
+            if (subjectInput === null) return;
+            bodyInput = prompt('Testo invio:', '') || '';
+            if (bodyInput === null) return;
           }
         } else {
           subjectInput = prompt('Oggetto invio (opzionale):', '') || '';
           if (subjectInput === null) return;
+          bodyInput = prompt('Testo invio:', '') || '';
+          if (bodyInput === null) return;
         }
       }
     } catch (_e) {
       subjectInput = prompt('Oggetto invio (opzionale):', '') || '';
       if (subjectInput === null) return;
+      bodyInput = prompt('Testo invio:', '') || '';
+      if (bodyInput === null) return;
     }
 
     const payload = { extracted_document_id: extractedDocumentId };
     if (recipientId) payload.recipient_id = recipientId;
     if (chosenTemplateId) payload.template_id = chosenTemplateId; else if (subjectInput) payload.subject = String(subjectInput).trim();
+    if (!chosenTemplateId && bodyInput) payload.body = String(bodyInput).trim();
     payload.sent_at = new Date().toISOString();
 
     try {
@@ -234,6 +247,7 @@
             <span class="dp-chip dp-chip-warn">ED#${escapeHtml(String(s.extracted_document_id))}</span>
           </div>
             <div class="dp-small">Oggetto: ${escapeHtml(s.subject || '')}</div>
+          <div class="dp-small">Testo: ${escapeHtml((s.body || '').slice(0, 120))}${(s.body && s.body.length > 120) ? '…' : ''}</div>
           <div class="dp-small">Destinatario: ${escapeHtml(s.recipient.name || '')} &lt;${escapeHtml(s.recipient.email || '')}&gt;</div>
           <div class="dp-small">Inviato: ${escapeHtml(formatDate(new Date(s.sent_at)))}</div>
         `;

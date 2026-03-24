@@ -7,4 +7,5 @@ class Sending < ApplicationRecord
   validates :recipient, presence: true
   validates :sent_at, presence: true
   validates :subject, length: { maximum: 255 }, allow_blank: true
+  validates :body, length: { maximum: 10_000 }, allow_blank: true
 end
