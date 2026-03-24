@@ -62,16 +62,19 @@ module DocumentProcessing
       )
         return unless extracted_document
 
-        extracted_document.update!(
-          status: "done",
-          metadata: metadata,
-          recipient: recipient,
-          confidence: global_confidence,
-          process_time_seconds: process_duration_seconds.to_f,
-          matched_employee: resolution.matched? ? resolution.employee : nil,
-          error_message: nil,
-          processed_at: Time.current
-        )
+        extracted_document.with_lock do
+          extracted_document.reload
+          extracted_document.update!(
+            status: "done",
+            metadata: metadata,
+            recipient: recipient,
+            confidence: global_confidence,
+            process_time_seconds: process_duration_seconds.to_f,
+            matched_employee: resolution.matched? ? resolution.employee : nil,
+            error_message: nil,
+            processed_at: Time.current
+          )
+        end
       end
 
       def mark_extracted_document_failed(extracted_document:, error_message:)
@@ -81,15 +84,18 @@ module DocumentProcessing
       def update_progress!(run)
         return { completed: false } if run.nil?
 
-        done = run.processing_items.where(status: %w[done failed]).count
-        total = run.total_documents
+        run.with_lock do
+          run.reload
+          done = run.processing_items.where(status: %w[done failed]).count
+          total = run.total_documents
 
-        run.update!(processed_documents: done)
+          run.update!(processed_documents: done)
 
-        completed = done.present? && total.present? && done == total
-        run.update!(status: "completed", completed_at: Time.current) if completed
+          completed = done.present? && total.present? && done == total
+          run.update!(status: "completed", completed_at: Time.current) if completed
 
-        { completed: completed }
+          { completed: completed }
+        end
       end
     end
   end

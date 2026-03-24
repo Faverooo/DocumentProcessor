@@ -66,9 +66,16 @@
       <div id="documentsList" class="dp-list"></div>
     </article>
 
+    <!-- Storico run rimosso per versione di prova frontend -->
+  </section>
+
+  <section class="dp-layout-1">
     <article class="dp-card">
-      <h3 class="dp-panel-title">Storico run</h3>
-      <div id="historyList" class="dp-list"></div>
+      <h3 class="dp-panel-title">Invii (Sendings)</h3>
+      <div class="dp-actions" style="margin-bottom:8px">
+        <button id="loadSendingsButton" type="button" class="dp-button dp-button-secondary">Carica invii</button>
+      </div>
+      <div id="sendingsList" class="dp-list"><div class="dp-empty">Nessun invio caricato.</div></div>
     </article>
   </section>
 </div>
@@ -92,8 +99,9 @@
     status: document.getElementById('pipelineStatus'),
     uploadsList: document.getElementById('uploadsList'),
     documentsList: document.getElementById('documentsList'),
-    historyList: document.getElementById('historyList'),
     eventStream: document.getElementById('eventStream')
+    ,loadSendingsButton: document.getElementById('loadSendingsButton')
+    ,sendingsList: document.getElementById('sendingsList')
   };
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -106,6 +114,7 @@
   function bindEvents() {
     refs.form.addEventListener('submit', startPipeline);
     refs.reloadButton.addEventListener('click', refreshAll);
+    if (refs.loadSendingsButton) refs.loadSendingsButton.addEventListener('click', loadSendings);
 
     document.addEventListener('click', (event) => {
       const uploadButton = event.target.closest('[data-upload-id]');
@@ -130,7 +139,109 @@
       if (actionButton.dataset.action === 'reassign-range') {
         reassignRange(extractedDocumentId);
       }
+
+      if (actionButton.dataset.action === 'mark-sent') {
+        const recipientId = actionButton.dataset.recipientId ? Number(actionButton.dataset.recipientId) : null;
+        markAsSent(extractedDocumentId, recipientId);
+      }
     });
+  }
+
+  async function markAsSent(extractedDocumentId, recipientId) {
+    if (!extractedDocumentId) return;
+    // Carica templates e offri la possibilità di usarne uno
+    let chosenTemplateId = null;
+    let subjectInput = '';
+    try {
+      const tplRes = await fetch('/templates');
+      if (tplRes.ok) {
+        const tplData = await tplRes.json();
+        const tplList = tplData.templates || [];
+        if (tplList.length > 0) {
+          let menu = 'Usare un template? Digita "t<ID>" (es. t1) oppure scrivi direttamente l\'oggetto. Template disponibili:\n';
+          tplList.forEach((t) => { menu += `${t.id}: ${t.subject}\n`; });
+          const choice = prompt(menu, '');
+          if (choice === null) return; // annulla
+          const trimmed = String(choice).trim();
+          if (trimmed.toLowerCase().startsWith('t')) {
+            const num = parseInt(trimmed.slice(1), 10);
+            if (!Number.isNaN(num)) chosenTemplateId = num;
+          } else {
+            subjectInput = trimmed;
+          }
+        } else {
+          subjectInput = prompt('Oggetto invio (opzionale):', '') || '';
+          if (subjectInput === null) return;
+        }
+      }
+    } catch (_e) {
+      subjectInput = prompt('Oggetto invio (opzionale):', '') || '';
+      if (subjectInput === null) return;
+    }
+
+    const payload = { extracted_document_id: extractedDocumentId };
+    if (recipientId) payload.recipient_id = recipientId;
+    if (chosenTemplateId) payload.template_id = chosenTemplateId; else if (subjectInput) payload.subject = String(subjectInput).trim();
+    payload.sent_at = new Date().toISOString();
+
+    try {
+      // Log the outgoing POST payload in the debug panel
+      logLastPost(payload, null);
+
+      const res = await fetch('/sendings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(payload)
+      });
+
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = { raw_text: await res.text() }; }
+
+      // Update raw POST panel with response
+      logLastPost(payload, { status: res.status, statusText: res.statusText, body: data });
+
+      
+      if (res.status === 201 && data.status === 'ok') {
+        appendEvent(`Invio registrato (extracted_document: ${extractedDocumentId})`, 'success');
+        await loadSendings();
+      } else {
+        appendEvent(`Errore registrazione invio: ${data.errors ? data.errors.join(', ') : data.message || res.statusText}`, 'error');
+      }
+    } catch (err) {
+      appendEvent(`Errore client invio: ${err.message}`, 'error');
+    }
+  }
+
+  async function loadSendings() {
+    if (!refs.sendingsList) return;
+    refs.sendingsList.innerHTML = '<div class="dp-empty">Caricamento invii...</div>';
+    try {
+      const res = await fetch('/sendings');
+      const data = await res.json();
+      const list = data.sendings || [];
+      if (list.length === 0) {
+        refs.sendingsList.innerHTML = '<div class="dp-empty">Nessun invio registrato.</div>';
+        return;
+      }
+
+      refs.sendingsList.innerHTML = '';
+      list.forEach((s) => {
+        const el = document.createElement('div');
+        el.className = 'dp-item';
+        el.innerHTML = `
+          <div class="dp-item-head">
+            <strong>Invio #${escapeHtml(String(s.id))}</strong>
+            <span class="dp-chip dp-chip-warn">ED#${escapeHtml(String(s.extracted_document_id))}</span>
+          </div>
+            <div class="dp-small">Oggetto: ${escapeHtml(s.subject || '')}</div>
+          <div class="dp-small">Destinatario: ${escapeHtml(s.recipient.name || '')} &lt;${escapeHtml(s.recipient.email || '')}&gt;</div>
+          <div class="dp-small">Inviato: ${escapeHtml(formatDate(new Date(s.sent_at)))}</div>
+        `;
+        refs.sendingsList.appendChild(el);
+      });
+    } catch (err) {
+      refs.sendingsList.innerHTML = '<div class="dp-empty">Impossibile caricare gli invii.</div>';
+    }
   }
 
   async function refreshAll() {
@@ -234,7 +345,7 @@
         state.selectedUploadId = null;
         renderUploads();
         refs.documentsList.innerHTML = '<div class="dp-empty">Nessun documento estratto.</div>';
-        refs.historyList.innerHTML = '<div class="dp-empty">Nessuna run.</div>';
+        if (refs.historyList) refs.historyList.innerHTML = '<div class="dp-empty">Nessuna run.</div>';
         return;
       }
 
@@ -282,7 +393,7 @@
     state.selectedUploadId = uploadId;
     renderUploads();
     refs.documentsList.innerHTML = '<div class="dp-empty">Caricamento documenti...</div>';
-    refs.historyList.innerHTML = '<div class="dp-empty">Caricamento storico...</div>';
+    if (refs.historyList) refs.historyList.innerHTML = '<div class="dp-empty">Caricamento storico...</div>';
 
     await Promise.all([
       loadExtractedForUpload(uploadId),
@@ -371,8 +482,9 @@
 
       <div class="dp-item-actions">
         <a class="dp-link-button" href="/documents/extracted/${documentData.id}/pdf">Scarica PDF</a>
-        <button type="button" class="dp-link-button" data-action="edit-recipient" data-extracted-id="${documentData.id}">Modifica destinatario</button>
+          <button type="button" class="dp-link-button" data-action="edit-recipient" data-extracted-id="${documentData.id}">Modifica destinatario</button>
         <button type="button" class="dp-link-button" data-action="reassign-range" data-extracted-id="${documentData.id}">Riassegna range</button>
+          <button type="button" class="dp-link-button" data-action="mark-sent" data-extracted-id="${documentData.id}" data-recipient-id="${documentData.matched_employee ? (documentData.matched_employee.id || '') : ''}">Segna inviato</button>
       </div>
     `;
 
@@ -415,6 +527,68 @@
     `;
 
     return wrapper;
+  }
+
+  // --- Raw traffic panel helpers ---
+  function ensureRawPanel() {
+    if (document.getElementById('dp-raw-panel')) return;
+    const panel = document.createElement('div');
+    panel.id = 'dp-raw-panel';
+    panel.style.marginTop = '16px';
+    panel.innerHTML = `
+      <h3>Raw traffic</h3>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:300px;">
+          <div class="dp-small" style="margin-bottom:6px;"><strong>Last POST request / response</strong></div>
+          <pre id="dp-last-post" style="background:#0f0f12;color:#e6e6e6;padding:8px;border-radius:4px;overflow:auto;max-height:260px;font-size:12px;white-space:pre-wrap;"></pre>
+        </div>
+        <div style="flex:1;min-width:300px;">
+          <div class="dp-small" style="margin-bottom:6px;"><strong>Last WebSocket message</strong></div>
+          <pre id="dp-last-ws" style="background:#0f0f12;color:#e6e6e6;padding:8px;border-radius:4px;overflow:auto;max-height:120px;font-size:12px;white-space:pre-wrap;"></pre>
+          <div class="dp-small" style="margin-top:8px;margin-bottom:6px;"><strong>WebSocket history</strong> <button id="dp-clear-ws-history" style="margin-left:8px;">Clear</button></div>
+          <div id="dp-ws-history" style="background:#0b0b0d;color:#cfcfcf;padding:8px;border-radius:4px;overflow:auto;max-height:120px;font-size:12px;white-space:pre-wrap;"></div>
+        </div>
+      </div>
+    `;
+    const container = document.querySelector('.dp-side') || document.body;
+    container.appendChild(panel);
+    const clearBtn = document.getElementById('dp-clear-ws-history');
+    if (clearBtn) clearBtn.addEventListener('click', () => { const h = document.getElementById('dp-ws-history'); if (h) h.innerHTML = ''; });
+  }
+
+  function logLastPost(requestObj, responseObj) {
+    ensureRawPanel();
+    const el = document.getElementById('dp-last-post');
+    const now = new Date().toISOString();
+    const payload = {
+      time: now,
+      request: requestObj,
+      response: responseObj
+    };
+    try { el.textContent = JSON.stringify(payload, null, 2); } catch (e) { el.textContent = String(payload); }
+  }
+
+  function logLastWs(message) {
+    ensureRawPanel();
+    const el = document.getElementById('dp-last-ws');
+    const now = new Date().toISOString();
+    const payload = { time: now, message };
+    try { el.textContent = JSON.stringify(payload, null, 2); } catch (e) { el.textContent = String(payload); }
+
+    // prepend to history
+    try {
+      const historyEl = document.getElementById('dp-ws-history');
+      if (historyEl) {
+        const entry = document.createElement('pre');
+        entry.style.margin = '0 0 8px 0';
+        entry.style.padding = '6px';
+        entry.style.background = '#060607';
+        entry.style.borderRadius = '4px';
+        entry.style.fontSize = '12px';
+        try { entry.textContent = JSON.stringify(payload, null, 2); } catch (e) { entry.textContent = String(payload); }
+        historyEl.insertBefore(entry, historyEl.firstChild);
+      }
+    } catch (e) { /* ignore history errors */ }
   }
 
   async function editRecipient(extractedDocumentId) {
@@ -510,6 +684,8 @@
     if (!jobId) return;
 
     subscribeToJob(jobId, async (message, unsubscribe) => {
+      // show raw websocket message for debugging
+      try { logLastWs(message); } catch (e) { /* ignore */ }
       if (message.event === 'split_completed') {
         if (message.status === 'error') {
           setStatus('error', message.message || 'Split fallito');
@@ -650,7 +826,15 @@
     });
 
     socket.addEventListener('message', (event) => {
-      const payload = JSON.parse(event.data);
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch (e) {
+        // not JSON - ignore
+        return;
+      }
+
+      if (!payload) return;
 
       if (payload.type === 'welcome' || payload.type === 'ping' || payload.type === 'confirm_subscription') {
         return;

@@ -1,123 +1,516 @@
-- employees:
-  - id
-  - created_at (datetime, null: false)
-  - email (string)
-  - employee_code (string)
-  - name (string)
-  - updated_at (datetime, null: false)
+================================================================================
+                    DOCUMENTPROCESSOR - API & ARCHITETTURA
+                              v2 (Refactored)
+================================================================================
 
-- extracted_documents:
-  - id
-  - confidence (json, default: {}, null: false)
-  - created_at (datetime, null: false)
-  - error_message (text)
-  - fallback_text (text)
-  - matched_employee_id (integer)
-  - metadata (json, default: {}, null: false)
-  - page_end (integer, null: false)
-  - page_start (integer, null: false)
-  - process_time_seconds (float)
-  - processed_at (datetime)
-  - recipient_name (string)
-  - recipients (json, default: [], null: false)
-  - sequence (integer, null: false)
-  - status (string, default: "queued", null: false)
-  - updated_at (datetime, null: false)
-  - uploaded_document_id (integer, null: false)
+## DATABASE SCHEMA
 
-- processing_items:
-  - id
-  - created_at (datetime, null: false)
-  - error_message (text)
-  - extracted_document_id (integer)
-  - filename (string, null: false)
-  - matched_employee_id (integer)
-  - processing_run_id (integer, null: false)
-  - recipient_name (string)
-  - sequence (integer, null: false)
-  - status (string, default: "queued", null: false)
-  - updated_at (datetime, null: false)
+### employees
+- id (integer, primary_key)
+- name (string)
+- email (string)
+- employee_code (string)
+- created_at, updated_at (datetime)
 
-- processing_runs:
-  - id
-  - completed_at (datetime)
-  - created_at (datetime, null: false)
-  - error_message (text)
-  - job_id (string, null: false)
-  - original_filename (string)
-  - processed_documents (integer, default: 0, null: false)
-  - started_at (datetime)
-  - status (string, default: "queued", null: false)
-  - total_documents (integer, default: 0, null: false)
-  - updated_at (datetime, null: false)
-  - uploaded_document_id (integer)
+### uploaded_documents
+- id (integer, primary_key)
+- original_filename (string, not null)
+- storage_path (string, not null) — path su filesystem
+- page_count (integer, default: 0) — per PDF; per CSV/image = 1
+- checksum (string, not null, unique) — SHA256 per deduplicazione
+- file_kind (string) — enum: "pdf" | "csv" | "image"
+- category (string, optional)
+- override_company (string, optional)
+- override_department (string, optional)
+- competence_period (string, optional)
+- created_at, updated_at (datetime)
 
-- uploaded_documents:
-  - id
-  - category (string)
-  - competence_period (string)
-  - created_at (datetime, null: false)
-  - original_filename (string, null: false)
-  - override_company (string)
-  - override_department (string)
-  - page_count (integer, default: 0, null: false)
-  - storage_path (string, null: false)
-  - updated_at (datetime, null: false)
+### processing_runs
+- id (integer, primary_key)
+- job_id (string, not null, unique) — UUID della pipeline asincrona
+- uploaded_document_id (integer, foreign_key)
+- original_filename (string)
+- status (string, default: "queued") — "queued" | "processing" | "completed" | "failed"
+- total_documents (integer, default: 0) — split pages (PDF) o righe (CSV) o 1 (image)
+- processed_documents (integer, default: 0)
+- started_at, completed_at (datetime, nullable)
+- error_message (text, nullable)
+- created_at, updated_at (datetime)
 
+### extracted_documents
+- id (integer, primary_key)
+- uploaded_document_id (integer, foreign_key)
+- sequence (integer) — posizione nel documento (pagina PDF, riga CSV, 1 per image)
+- page_start, page_end (integer) — per PDF split; per CSV/image = 1,1
+- status (string, default: "queued") — "queued" | "done" | "error" | "reassign_pending"
+- metadata (json, default: {}) — { company, department, date, type, reason, competence, ... }
+- confidence (json, default: {}) — { recipient: 0.95, date: 0.87, ... }
+- recipient_name (string, nullable)
+- recipients (json, default: []) — lista completa candidati
+- matched_employee_id (integer, nullable, foreign_key)
+- error_message (text, nullable)
+- fallback_text (text, nullable)
+- processed_at (datetime, nullable)
+- process_time_seconds (float, nullable)
+- created_at, updated_at (datetime)
 
-
-
+### processing_items
+- id (integer, primary_key)
+- processing_run_id (integer, foreign_key)
+- extracted_document_id (integer, foreign_key, nullable)
+- sequence (integer) — item numero dentro la run
+- filename (string)
+- recipient_name (string, nullable)
+- matched_employee_id (integer, nullable, foreign_key)
+- status (string, default: "queued")
+- error_message (text, nullable)
+- created_at, updated_at (datetime)
 
 
-  #############################################################################
+================================================================================
+## REST API ENDPOINTS
+================================================================================
 
-- POST /documents/split  
-  - Input: multipart/form-data: `pdf` (file, required), optional fields `category` (string), `company` (string), `department` (string), `competence_period` (string)
-  - Restituisce: `{ status: "queued", message: string, job_id: string, uploaded_document_id: integer }`  
-  - WebSocket (sottoscrivere `job_id`):  
-    - `split_completed`: `{ status: "success" | "error", original_pages: int, mini_pdfs_count: int, mini_pdfs: [string], message?: string }` inviato al termine del processo di split.  
-    - `document_processed`: `{ event: "document_processed", status: "success" | "error", extracted_document_id: int, filename?: string, ocr_text?: string, extracted_names?: [string], extracted_document_data?: { company: string|null, department: string|null, date: string|null, type: string|null, reason: string|null, competence: string|null }, extracted_confidence?: { recipient: float, date: float, company: float, department: float, type: float, reason: float, competence: float }, matched_recipient?: { id: int, name: string, email: string, employee_code: string }, fallback_text?: string, message?: string }` inviato quando un mini‑PDF è stato processato (successo o errore).  
-    - `processing_completed`: `{ status: "success" | "error" }` inviato quando il run è finito.
+### PDF PROCESSING (Split + Mini-Document Extraction)
 
-- POST /documents/test_data  NON CREDO LA USERETE
-  - Input: multipart/form-data: `pdf` (file, required)
-  - Restituisce: `{ status: "queued", message: string, job_id: string }`  
-  - WebSocket: può ricevere `document_queued` e poi `document_processed`/`document_error` per il singolo item.
+POST /documents/split
+──────────────────────
+Input:
+  - file: pdf (multipart/form-data, required)
+  - category: string (optional)
+  - company: string (optional)
+  - department: string (optional)
+  - competence_period: string (optional)
 
-- GET /documents/uploads/:uploaded_document_id/extracted  
-  - Input: path param `uploaded_document_id` (integer)
-  - Restituisce:  
+Response (200 OK):
+{
+  "status": "queued",
+  "message": "Pipeline avviata: split in corso, processamento documenti automatico",
+  "job_id": "<UUID>",
+  "uploaded_document_id": <integer>
+}
+
+Response (400 Bad Request / 422 Unprocessable Entity):
+{
+  "status": "error",
+  "message": "<validation_error>"
+}
+
+Error Cases:
+  - File non PDF → "Formato non valido: carica un PDF"
+  - File > 50MB → "File troppo grande"
+  - Documento duplicato (checksum match) → "Documento gia caricato; riutilizzo documento esistente"
+  - Errore salvataggio → "Errore nel salvataggio del file"
+
+Job Behavior:
+  - Enqueues PdfSplitJob (async)
+  - Splits PDF → crea processing_items (uno per pagina)
+  - Per ogni item, enqueues DataExtractionJob
+  - WebSocket: broadcast split_completed → document_processed × N → processing_completed
+
+
+───────────────────────────────────────────────────────────────────────────────
+
+### GENERIC FILE PROCESSING (CSV / Image without Split)
+
+POST /documents/process_file
+─────────────────────────────
+Input:
+  - file: csv|png|jpg|jpeg (multipart/form-data, required)
+  - category: string (optional)
+  - company: string (optional)
+  - department: string (optional)  
+  - competence_period: string (optional)
+
+Response (200 OK):
+{
+  "status": "queued" | "already_exists" | "error",
+  "message": "<descriptive_message>",
+  "job_id": "<UUID>" | null,
+  "uploaded_document_id": <integer>
+}
+
+Response Cases:
+  1. NEW FILE (status: "queued")
+     → Enqueues GenericFileProcessingJob
+     → Frontend must subscribe to job_id on WebSocket
+     
+  2. DUPLICATE (status: "already_exists")
+     → Returns existing uploaded_document_id
+     → job_id is null
+     → Frontend must NOT subscribe to WebSocket
+     
+  3. PDF UPLOADED (status: "error")
+     → Message: "Per i PDF usa l'endpoint /documents/split"
+     → job_id is null
+     
+  4. UNSUPPORTED FORMAT (status: "error")
+     → Message: "Formato non supportato"
+
+File Support:
+  - CSV: text/csv, application/csv, application/vnd.ms-excel
+  - Image: image/jpeg, image/png
+  - Max Size: 20MB (CSV/image) vs 50MB (PDF)
+  - Dedup: Checksum-based (SHA256)
+
+Job Behavior:
+  - Enqueues GenericFileProcessingJob (async)
+  - CSV Path:
+    → CSVProcessor.extract_rows() runs LLM extraction on each row (as text)
+    → For each result: create extracted_document + metadata → broadcast document_processed
+  - Image Path:
+    → ImageProcessor.extract() runs OCR + LLM on single image
+    → Create extracted_document + metadata → broadcast document_processed (single)
+  - WebSocket: broadcast document_processed (12-key schema) → processing_completed
+
+
+───────────────────────────────────────────────────────────────────────────────
+
+### LEGACY (Test endpoints)
+
+POST /documents/test_data
+─────────────────────────
+⚠️ DEBUG ONLY — Process single PDF for data extraction without split
+Response: { status: "queued", message, job_id }
+
+
+───────────────────────────────────────────────────────────────────────────────
+
+### DOCUMENT LISTING & RETRIEVAL
+
+GET /documents/uploads
+──────────────────────
+Query:
+  - (none)
+
+Response (200 OK):
+{
+  "uploaded_documents": [
     {
-      uploaded_document: { id, original_filename, page_count, created_at, ... },
-      extracted_documents: [ extracted_document_payload, ... ]
-    }  
-  - `extracted_document_payload` include: `id, sequence, status, page_start, page_end, metadata, recipients, confidence, recipient_name, matched_employee, error_message, processed_at, pdf_download_url, process_time_seconds, created_at, updated_at`  
-  - WebSocket: non strettamente necessario (è snapshot), ma il canale invierà aggiornamenti `document_processed` / `document_error` quando i singoli documenti vengono processati.
+      "id": <integer>,
+      "original_filename": string,
+      "file_kind": "pdf" | "csv" | "image",
+      "page_count": <integer>,
+      "created_at": ISO8601
+    },
+    ...
+  ]
+}
 
-- GET /documents/extracted/:id  
-  - Input: path param `id` (integer)
-  - Restituisce: `{ extracted_document: extracted_document_payload }` (vedi sopra)  
-  - WebSocket: aspettarsi eventuali `document_processed` aggiornamenti per lo stesso `id`.
 
-- GET /documents/extracted/:id/pdf  
-  - Input: path param `id` (integer)  
-  - Restituisce: stream PDF (attachment) generato on‑demand.  
-  - WebSocket: nessun messaggio specifico; UI scarica quando l'utente clicca.
+GET /documents/uploads/:id/file
+───────────────────────────────
+Path Params:
+  - id: uploaded_document.id (integer)
 
-- PATCH /documents/extracted/:id/reassign_range  
-  - Input: path param `id` (integer) and body either JSON `{ "page_start": int, "page_end": int }` or form-data `page_range` (string "X-Y")  
-  - Restituisce: `{ status: "queued", message: string, extracted_document_id, page_start, page_end }`  
-  - WebSocket: nessun evento aggiuntivo specifico viene inviato; ascolta `document_processed` / `processing_completed` per sapere quando quel documento è stato rielaborato.
+Response (200 OK):
+  - Content-Type: application/pdf | text/csv | image/jpeg | image/png
+  - Body: binary file stream
+  - Disposition: attachment; filename="<original_filename>"
 
-- GET /processing_runs/:job_id (consigliato)  
-  - Input: path param `job_id` (string)  
-  - Restituisce: `{ job_id, status, total_documents, processed_documents, started_at, completed_at, items: [{sequence, status, extracted_document_id}] }`  
-  - Uso: utile per polling periodico se WebSocket non disponibile.
+Response (404 Not Found):
+  - File not found in storage
 
-WebSocket: come sottoscrivere e cosa aspettarsi
-- Canale: `DocumentProcessingChannel` (ActionCable)  
-- Subscribe identifier (client): `{"channel":"DocumentProcessingChannel","job_id":"<JOB_ID>"}`  
-- Messaggi che il client può ricevere (tipo + payload):
-  - `split_completed`: `{ status: "success" | "error", original_pages: int, mini_pdfs_count: int, mini_pdfs: [string], message?: string }` (fine split)
-  - `document_processed`: `{ event: "document_processed", status: "success" | "error", extracted_document_id: int, filename?: string, ocr_text?: string, extracted_names?: [string], extracted_document_data?: {...}, extracted_confidence?: float, matched_recipient?: {id,name,email,employee_code}, fallback_text?: string, message?: string }` (fine elaborazione singolo item)
-  - `processing_completed`: `{ status: "success" | "error" }` (fine run)
+
+GET /documents/uploads/:uploaded_document_id/extracted
+─────────────────────────────────────────────────────
+Path Params:
+  - uploaded_document_id: integer
+
+Response (200 OK):
+{
+  "uploaded_document": {
+    "id": <integer>,
+    "original_filename": string,
+    "page_count": <integer>,
+    "file_kind": "pdf" | "csv" | "image",
+    "created_at": ISO8601
+  },
+  "extracted_documents": [
+    {
+      "id": <integer>,
+      "sequence": <integer>,
+      "status": "done" | "error" | "queued",
+      "page_start": <integer>,
+      "page_end": <integer>,
+      "metadata": { ... },
+      "confidence": { ... },
+      "recipient_name": string|null,
+      "recipients": [...],
+      "matched_employee": { "id", "name", "email", "employee_code" } | null,
+      "error_message": string|null,
+      "fallback_text": string|null,
+      "processed_at": ISO8601|null,
+      "process_time_seconds": float|null,
+      "created_at": ISO8601,
+      "updated_at": ISO8601
+    },
+    ...
+  ]
+}
+
+Response (404 Not Found):
+  - Document not found
+
+
+GET /documents/extracted/:id
+────────────────────────────
+Path Params:
+  - id: extracted_document.id (integer)
+
+Response (200 OK):
+{
+  "extracted_document": { ... } ← same structure as above
+}
+
+Response (404 Not Found):
+  - extracted_document not found
+
+
+GET /documents/extracted/:id/pdf
+─────────────────────────────────
+Path Params:
+  - id: extracted_document.id (integer)
+
+Response (200 OK):
+  - Content-Type: application/pdf
+  - Body: PDF stream (page range extracted from source)
+  - Filename: estratto_<id>_p<start>-<end>.pdf
+
+Response (404 Not Found):
+  - extracted_document or source file not found
+
+
+───────────────────────────────────────────────────────────────────────────────
+
+### METADATA & REASSIGNMENT
+
+PATCH /documents/extracted/:id/metadata
+────────────────────────────────────────
+Path Params:
+  - id: extracted_document.id (integer)
+
+Body (JSON):
+{
+  "metadata_updates": {
+    "company": "ACME Corp",
+    "department": "Finance",
+    "date": "2026-03-24",
+    "type": "invoice",
+    "reason": "Monthly billing",
+    "competence": "2026-03"
+  }
+}
+
+Response (200 OK):
+{
+  "status": "ok",
+  "extracted_document": { ... }
+}
+
+Response (404 Not Found):
+  - Document not found
+
+
+PATCH /documents/extracted/:id/reassign_range
+───────────────────────────────────────────────
+Path Params:
+  - id: extracted_document.id (integer)
+
+Body (JSON or form-data):
+  Option 1 (JSON): { "page_start": 5, "page_end": 7 }
+  Option 2 (form-data): page_range="5-7"
+
+Response (200 OK):
+{
+  "status": "queued",
+  "message": "Range pagine rielaborato in coda",
+  "extracted_document_id": <integer>,
+  "page_start": <integer>,
+  "page_end": <integer>
+}
+
+Behavior:
+  - Updates page_start / page_end
+  - Sets status → "reassign_pending"
+  - Enqueues DataExtractionJob per rielaborazione
+  - WebSocket: emit document_processed when ready
+
+
+================================================================================
+## WEBSOCKET (ActionCable)
+================================================================================
+
+Channel: DocumentProcessingChannel
+Subscribe Identifier: { "channel": "DocumentProcessingChannel", "job_id": "<JOB_ID>" }
+
+Connected: Client subscribes with job_id
+Disconnected: Client unsubscribes
+
+Messages Client Should Listen For:
+────────────────────────────────
+
+1. split_completed (PDF pipeline only)
+   Sent when split finishes (success or error)
+   {
+     "event": "split_completed",
+     "status": "success" | "error",
+     "original_pages": <integer>,
+     "mini_pdfs_count": <integer>,
+     "mini_pdfs": ["path1", "path2", ...],
+     "message": "..."
+   }
+
+2. document_processed (PDF and CSV/Image pipelines)
+   Sent for each extracted document
+   Uniform 12-key schema:
+   {
+     "event": "document_processed",
+     "status": "success" | "error",
+     "filename": "<original_filename>",
+     "ocr_text": "full OCR text" | null,
+     "recipient": "Recipient Name" | null,
+     "extracted_document_data": {
+       "company": "...",
+       "department": "...",
+       "date": "...",
+       "type": "...",
+       "reason": "...",
+       "competence": "..."
+     } | null,
+     "extracted_confidence": {
+       "recipient": 0.95,
+       "company": 0.87,
+       ...
+     } | null,
+     "matched_recipient": {
+       "id": <integer>,
+       "name": "<string>",
+       "email": "<string>",
+       "employee_code": "<string>"
+     } | null,
+     "extracted_document_id": <integer>,
+     "document_index": <integer> (1-based sequence),
+     "total_documents": <integer>,
+     "message": "success message or error details" | null
+   }
+
+3. processing_completed (Final status)
+   Sent when entire run is done (after all documents)
+   {
+     "event": "processing_completed",
+     "status": "success" | "error",
+     "processed_documents": <integer>,
+     "total_documents": <integer>,
+     "message": "..." | null
+   }
+
+
+Subscription Flow Example:
+─────────────────────────
+
+// Client subscribes
+var subscription = consumer.subscriptions.create(
+  { channel: "DocumentProcessingChannel", job_id: "abc-123-def" },
+  {
+    received(data) {
+      console.log("Event:", data.event);
+      console.log("Status:", data.status);
+      // Handle split_completed, document_processed, processing_completed
+    }
+  }
+);
+
+// Server broadcasts to all subscribers of this job_id
+notifier.broadcast(job_id, {
+  event: "document_processed",
+  status: "success",
+  ...
+});
+
+
+================================================================================
+## ARCHITECTURE PATTERNS
+================================================================================
+
+Layer 1: HTTP Transport (Controller)
+  → POST /split → InitializeProcessing command
+  → POST /process_file → InitializeFileProcessing command
+  → GET /extracted/:id → Direct model query
+  → PATCH /extracted/:id/metadata → DbManager
+  ✓ Thin controller, delegates all logic
+
+Layer 2: Commands (Entry Points, DI-aware)
+  → InitializeProcessing
+    · Validates file (PDF only)
+    · Detects dedup (checksum)
+    · Creates UploadedDocument + ProcessingRun (in transaction)
+    · Enqueues PdfSplitJob
+    · Returns { job_id, uploaded_document_id, status, message }
+  
+  → InitializeFileProcessing
+    · Validates file (CSV/image only, rejects PDF)
+    · Detects dedup (checksum)
+    · Creates UploadedDocument + ProcessingRun (in transaction)
+    · Enqueues GenericFileProcessingJob
+    · Returns { job_id, uploaded_document_id, status } where status ∈ {"queued", "already_exists", "error"}
+
+Layer 3: Jobs (Async, Sidekiq)
+  → PdfSplitJob.perform(source_path, job_id)
+    · Invokes ProcessSplitRun
+  
+  → GenericFileProcessingJob.perform(source_path, {job_id, uploaded_document_id, file_kind})
+    · Invokes ProcessGenericFile
+  
+  → DataExtractionJob.perform(mini_pdf_path, {job_id, extracted_document_id, ...})
+    · Invokes ProcessDataItem
+
+Layer 4: Services (Business Logic, Stateless)
+  → ProcessSplitRun (Orchestrator)
+    · Splits PDF using CombinePDF
+    · Creates processing_items + extracted_documents
+    · Enqueues DataExtractionJob per item
+    · Broadcasts split_completed + document_processed (for each) + processing_completed
+    · All DB ops in transaction; broadcast outside
+  
+  → ProcessDataItem (Processor)
+    · Performs OCR on PDF page using AWS Textract
+    · Extracts metadata using AWS Bedrock
+    · Builds uniform 12-key WebSocket payload
+    · Broadcasts document_processed
+  
+  → ProcessGenericFile (Orchestrator)
+    · Dispatches CSV → CSVProcessor.extract_rows() → returns structured data with LLM extraction
+    · Dispatches Image → ImageProcessor.extract() → returns structured data with OCR + LLM
+    · For CSV: iterate extracted_rows results → create extracted_documents → broadcast per row
+    · For Image: single extraction → create extracted_document → broadcast once
+    · All DB ops in transaction; broadcast outside
+
+Layer 5: Pure Processors (No DB, No Broadcast)
+  → CSVProcessor#parse(file_path)
+    · Input: path to CSV file
+    · Output: Array<Hash> [{"recipient" => "...", "amount" => "100"}, ...]
+    · Pure CSV parser: no DB, no side effects
+    · Test: tempfile + assert output
+  
+  → CSVProcessor#extract_rows(file_path, container)
+    · Input: path to CSV file + DI container
+    · Output: Array<{ocr_text, metadata, confidence, recipient, employee}>
+    · Parses CSV rows → runs LLM extraction on each row (like ImageProcessor.extract)
+    · No database access, no broadcast — pure extraction
+    · Test: FakeContainer with mocked data_extractor + recipient_resolver
+  
+  → ImageProcessor#extract(file_path)
+    · Input: path to image file
+    · Output: { ocr_text, metadata, confidence, recipient, employee }
+    · Delegates to Container (ocr_service, data_extractor, recipient_resolver)
+    · No database access, no direct broadcast
+    · Test: FakeContainer mock + assert output
+
+Layer 6: Dependency Injection (Container)
+  → Centralizes all external service instantiation
+  → Tests inject FakeContainer
+  → Production instantiates real AWS clients once per container
+  → Passed to services/jobs that need it
+  ✓ Easy to test: swap real services for fakes
+

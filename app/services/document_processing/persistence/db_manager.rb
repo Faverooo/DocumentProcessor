@@ -7,10 +7,10 @@ module DocumentProcessing
       end
 
       # Restituisce tutti i documenti caricati (minimo payload)
-      # => [{ id:, original_filename:, page_count:, created_at: }, ...]
+      # => [{ id:, original_filename:, page_count:, file_kind:, created_at: }, ...]
       def uploaded_documents_list
-        UploadedDocument.order(created_at: :desc).pluck(:id, :original_filename, :page_count, :created_at).map do |id, name, pages, ts|
-          { id: id, original_filename: name, page_count: pages, created_at: ts }
+        UploadedDocument.order(created_at: :desc).pluck(:id, :original_filename, :page_count, :file_kind, :created_at).map do |id, name, pages, kind, ts|
+          { id: id, original_filename: name, page_count: pages, file_kind: kind, created_at: ts }
         end
       end
 

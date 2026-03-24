@@ -1,8 +1,10 @@
 require "fileutils"
+require "digest"
 
 module DocumentProcessing
   class UploadManager
     MAX_PDF_SIZE = 50.megabytes
+    MAX_GENERIC_SIZE = 20.megabytes
     ALLOWED_PDF_CONTENT_TYPES = [
       "application/pdf",
       "application/x-pdf",
@@ -11,6 +13,18 @@ module DocumentProcessing
       "text/pdf",
       "text/x-pdf",
       "application/octet-stream"
+    ].freeze
+
+    ALLOWED_CSV_CONTENT_TYPES = [
+      "text/csv",
+      "application/csv",
+      "application/vnd.ms-excel"
+    ].freeze
+
+    ALLOWED_IMAGE_CONTENT_TYPES = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png"
     ].freeze
 
     class ValidationError < StandardError; end
@@ -24,6 +38,33 @@ module DocumentProcessing
     def persist_source_pdf(file)
       validate_pdf_upload!(file)
       save_file(file:, base_dir: Rails.root.join("storage", "uploads", "source_documents"), random_bytes: 8)
+    end
+
+    def persist_supported_source_file(file)
+      kind = detect_upload_kind(file)
+      validate_supported_upload!(file, kind)
+      save_file(file:, base_dir: Rails.root.join("storage", "uploads", "source_documents"), random_bytes: 8)
+    end
+
+    def detect_upload_kind(file)
+      return :unknown unless file.present?
+
+      filename = file.original_filename.to_s.downcase
+      content_type = file.content_type.to_s.downcase
+
+      return :pdf if filename.end_with?(".pdf") || ALLOWED_PDF_CONTENT_TYPES.include?(content_type)
+      return :csv if filename.end_with?(".csv") || ALLOWED_CSV_CONTENT_TYPES.include?(content_type)
+      return :image if %w[.jpg .jpeg .png].any? { |ext| filename.end_with?(ext) } || ALLOWED_IMAGE_CONTENT_TYPES.include?(content_type)
+
+      :unknown
+    end
+
+    def compute_checksum(file)
+      io = file.respond_to?(:tempfile) ? file.tempfile : file
+      io.rewind if io.respond_to?(:rewind)
+      data = io.read
+      io.rewind if io.respond_to?(:rewind)
+      Digest::SHA256.hexdigest(data)
     end
 
     private
@@ -49,6 +90,29 @@ module DocumentProcessing
       content_type = file.content_type.to_s.downcase
       raise ValidationError, "Formato non valido: carica un PDF" unless ALLOWED_PDF_CONTENT_TYPES.include?(content_type)
       raise ValidationError, "Contenuto file non valido: il file non sembra un PDF" unless pdf_signature_valid?(file)
+    end
+
+    def validate_supported_upload!(file, kind)
+      raise ValidationError, "Nessun file selezionato" unless file.present?
+      raise ValidationError, "Formato non supportato" if kind == :unknown
+      raise ValidationError, "File troppo grande (max 20 MB)" if file_size(file) > MAX_GENERIC_SIZE
+
+      content_type = file.content_type.to_s.downcase
+
+      case kind
+      when :csv
+        valid_ext = file.original_filename.to_s.downcase.end_with?(".csv")
+        valid_type = ALLOWED_CSV_CONTENT_TYPES.include?(content_type)
+        raise ValidationError, "Formato non valido: carica un CSV" unless valid_ext || valid_type
+      when :image
+        valid_ext = %w[.jpg .jpeg .png].any? { |ext| file.original_filename.to_s.downcase.end_with?(ext) }
+        valid_type = ALLOWED_IMAGE_CONTENT_TYPES.include?(content_type)
+        raise ValidationError, "Formato non valido: carica un JPEG o PNG" unless valid_ext || valid_type
+      when :pdf
+        validate_pdf_upload!(file)
+      else
+        raise ValidationError, "Formato non supportato"
+      end
     end
 
     def file_size(file)
@@ -78,8 +142,7 @@ module DocumentProcessing
     def sanitized_original_filename(name)
       basename = File.basename(name.to_s)
       sanitized = basename.gsub(/[^0-9A-Za-z.\-_]/, "_")
-      sanitized = "upload.pdf" if sanitized.blank?
-      sanitized = "#{sanitized}.pdf" unless sanitized.downcase.end_with?(".pdf")
+      sanitized = "upload.bin" if sanitized.blank?
       sanitized
     end
   end

@@ -53,6 +53,7 @@ class DocumentsController < ApplicationController
         id: uploaded_document.id,
         original_filename: uploaded_document.original_filename,
         page_count: uploaded_document.page_count,
+        file_kind: uploaded_document.file_kind,
         created_at: uploaded_document.created_at
       },
       extracted_documents: uploaded_document.extracted_documents.order(:sequence).map { |doc| extracted_document_presenter(doc).as_json }
@@ -66,6 +67,20 @@ class DocumentsController < ApplicationController
   def uploads
     list = DocumentProcessing::Persistence::DbManager.new.uploaded_documents_list
     render json: { uploaded_documents: list }
+  end
+
+  # GET /documents/uploads/:id/file
+  def uploaded_file
+    uploaded_document = UploadedDocument.find(params[:id])
+    source_path = uploaded_document.storage_path
+    return render_error("File sorgente non disponibile") unless file_storage.exist?(source_path)
+
+    send_file source_path,
+              filename: uploaded_document.original_filename,
+              type: content_type_for_uploaded(uploaded_document),
+              disposition: "attachment"
+  rescue ActiveRecord::RecordNotFound
+    render json: { status: "error", message: "Documento sorgente non trovato" }, status: :not_found
   end
 
   
@@ -154,6 +169,32 @@ class DocumentsController < ApplicationController
     render_error("Errore: #{e.message}")
   end
 
+  # POST /documents/process_file
+  # Receives a single file (csv, jpeg, png) and processes it without performing split.
+  # Returns: { status: 'ok', job_id: '<uuid>' }
+  def process_file
+    result = initialize_file_processing_command.call(
+      file: params[:file],
+      category: params[:category],
+      company: params[:company],
+      department: params[:department],
+      competence_period: params[:competence_period]
+    )
+
+    render json: {
+      status: result[:status] || "queued",
+      message: result[:message],
+      job_id: result[:job_id],
+      uploaded_document_id: result[:uploaded_document_id]
+    }
+  rescue DocumentProcessing::UploadManager::ValidationError => e
+    render_error(e.message)
+  rescue DocumentProcessing::UploadManager::PersistenceError
+    render_error("Errore nel salvataggio del file")
+  rescue StandardError => e
+    render_error("Errore: #{e.message}")
+  end
+
   private
 
   def parse_range_params
@@ -198,6 +239,14 @@ class DocumentsController < ApplicationController
 
   def initialize_processing_command_class
     DocumentProcessing::Commands::InitializeProcessing
+  end
+
+  def initialize_file_processing_command
+    initialize_file_processing_command_class.new(upload_manager: upload_manager)
+  end
+
+  def initialize_file_processing_command_class
+    DocumentProcessing::Commands::InitializeFileProcessing
   end
 
   def enqueue_single_data_extraction_command
@@ -249,6 +298,22 @@ class DocumentsController < ApplicationController
 
   def data_extraction_job_class
     DataExtractionJob
+  end
+
+  def content_type_for_uploaded(uploaded_document)
+    case uploaded_document.file_kind
+    when "pdf"
+      "application/pdf"
+    when "csv"
+      "text/csv"
+    when "image"
+      ext = File.extname(uploaded_document.original_filename.to_s).downcase
+      return "image/png" if ext == ".png"
+
+      "image/jpeg"
+    else
+      "application/octet-stream"
+    end
   end
 
   def pdf_split_job_class

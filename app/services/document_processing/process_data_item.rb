@@ -42,15 +42,17 @@ module DocumentProcessing
       if job_id.present?
         notifier.broadcast(
           job_id,
-          event: "document_processed",
-          status: "success",
-          filename: File.basename(file_path),
-          ocr_text: full_text,
-          recipient: recipient,
-          extracted_document_data: extracted_document_data,
-          extracted_confidence: final_global_confidence,
-          matched_recipient: format_employee(resolution.employee),
-          extracted_document_id: extracted_document&.id
+          build_success_payload(
+            filename: File.basename(file_path),
+            ocr_text: full_text,
+            recipient: recipient,
+            extracted_document_data: extracted_document_data,
+            extracted_confidence: final_global_confidence,
+            matched_recipient: format_employee(resolution.employee),
+            extracted_document_id: extracted_document&.id,
+            document_index: item&.sequence,
+            total_documents: run&.total_documents
+          )
         )
       end
     rescue StandardError => e
@@ -60,11 +62,13 @@ module DocumentProcessing
       if job_id.present?
         notifier.broadcast(
           job_id,
-          event: "document_processed",
-          status: "error",
-          filename: file_path ? File.basename(file_path) : nil,
-          message: e.message,
-          extracted_document_id: extracted_document&.id
+          build_error_payload(
+            message: e.message,
+            filename: file_path ? File.basename(file_path) : nil,
+            extracted_document_id: extracted_document&.id,
+            document_index: item&.sequence,
+            total_documents: run&.total_documents
+          )
         )
       end
     ensure
@@ -113,7 +117,6 @@ module DocumentProcessing
         status: "success"
       )
     end
-
     def data_item_repository
       container.data_item_repository
     end
@@ -130,6 +133,40 @@ module DocumentProcessing
         name: employee.name,
         email: employee.email,
         employee_code: employee.employee_code
+      }
+    end
+
+    def build_success_payload(filename:, ocr_text:, recipient:, extracted_document_data:, extracted_confidence:, matched_recipient:, extracted_document_id:, document_index:, total_documents:)
+      {
+        event: "document_processed",
+        status: "success",
+        filename: filename,
+        ocr_text: ocr_text,
+        recipient: recipient,
+        extracted_document_data: extracted_document_data || {},
+        extracted_confidence: extracted_confidence || {},
+        matched_recipient: matched_recipient,
+        extracted_document_id: extracted_document_id,
+        document_index: document_index,
+        total_documents: total_documents,
+        message: nil
+      }
+    end
+
+    def build_error_payload(message:, filename:, extracted_document_id:, document_index:, total_documents:)
+      {
+        event: "document_processed",
+        status: "error",
+        filename: filename,
+        ocr_text: nil,
+        recipient: nil,
+        extracted_document_data: {},
+        extracted_confidence: {},
+        matched_recipient: nil,
+        extracted_document_id: extracted_document_id,
+        document_index: document_index,
+        total_documents: total_documents,
+        message: message
       }
     end
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_21_121000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_24_123000) do
   create_table "employees", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email"
@@ -74,8 +74,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_21_121000) do
     t.index ["uploaded_document_id"], name: "index_processing_runs_on_uploaded_document_id"
   end
 
+  create_table "sendings", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "extracted_document_id", null: false
+    t.integer "recipient_id", null: false
+    t.datetime "sent_at", null: false
+    t.string "subject"
+    t.integer "template_id"
+    t.datetime "updated_at", null: false
+    t.index ["extracted_document_id"], name: "index_sendings_on_extracted_document_id"
+    t.index ["recipient_id"], name: "index_sendings_on_recipient_id"
+    t.index ["template_id"], name: "index_sendings_on_template_id"
+  end
+
+  create_table "templates", force: :cascade do |t|
+    t.text "body"
+    t.datetime "created_at", null: false
+    t.string "subject", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "uploaded_documents", force: :cascade do |t|
     t.string "category"
+    t.string "checksum"
     t.string "competence_period"
     t.datetime "created_at", null: false
     t.string "original_filename", null: false
@@ -84,6 +105,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_21_121000) do
     t.integer "page_count", default: 0, null: false
     t.string "storage_path", null: false
     t.datetime "updated_at", null: false
+    t.index ["checksum"], name: "index_uploaded_documents_on_checksum", unique: true
   end
 
   add_foreign_key "extracted_documents", "employees", column: "matched_employee_id"
@@ -92,4 +114,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_21_121000) do
   add_foreign_key "processing_items", "extracted_documents"
   add_foreign_key "processing_items", "processing_runs"
   add_foreign_key "processing_runs", "uploaded_documents"
+  add_foreign_key "sendings", "employees", column: "recipient_id"
+  add_foreign_key "sendings", "extracted_documents"
+  add_foreign_key "sendings", "templates"
 end
