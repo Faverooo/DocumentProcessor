@@ -59,7 +59,8 @@ class InitializeProcessingTest < ActiveSupport::TestCase
     command = DocumentProcessing::Commands::InitializeProcessing.new(
       upload_manager: FakeUploadManager.new,
       pdf_split_job_class: FakePdfSplitJob,
-      pdf_loader: FakePdfLoader
+      pdf_loader: FakePdfLoader,
+      file_storage: DocumentProcessing::Persistence::FileStorage.new
     )
 
     result = command.call(file: file, category: "cedolino")
@@ -97,7 +98,8 @@ class InitializeProcessingTest < ActiveSupport::TestCase
     command = DocumentProcessing::Commands::InitializeProcessing.new(
       upload_manager: FakeUploadManager.new(checksum: expected_checksum),
       pdf_split_job_class: FakePdfSplitJob,
-      pdf_loader: FakePdfLoader
+      pdf_loader: FakePdfLoader,
+      file_storage: DocumentProcessing::Persistence::FileStorage.new
     )
 
     result = command.call(file: file)

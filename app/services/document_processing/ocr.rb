@@ -1,6 +1,6 @@
 module DocumentProcessing
   class Ocr
-    def initialize(textract_client: Aws::Textract::Client.new)
+    def initialize(textract_client:)
       @textract = textract_client
     end
 

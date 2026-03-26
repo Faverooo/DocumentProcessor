@@ -12,17 +12,23 @@ class DocumentsController < ApplicationController
       department: params[:department],
       competence_period: params[:competence_period]
     )
+    if result.is_a?(Hash) && result[:ok] == false
+      case result[:error]
+      when :validation
+        return render_error(result[:message])
+      when :persistence
+        return render_error("Errore nel salvataggio del file")
+      else
+        return render_error("Errore: #{result[:message]}")
+      end
+    end
 
     render json: {
-      status: "queued",
+      status: result[:status] || "queued",
       message: result[:message],
       job_id: result[:job_id],
       uploaded_document_id: result[:uploaded_document_id]
     }
-  rescue DocumentProcessing::UploadManager::ValidationError => e
-    render_error(e.message)
-  rescue DocumentProcessing::UploadManager::PersistenceError
-    render_error("Errore nel salvataggio del file")
   rescue StandardError => e
     render_error("Errore: #{e.message}")
   end
@@ -30,16 +36,22 @@ class DocumentsController < ApplicationController
   # POST /documents/test_data
   def test_data
     result = enqueue_single_data_extraction_command.call(file: params[:pdf])
+    if result.is_a?(Hash) && result[:ok] == false
+      case result[:error]
+      when :validation
+        return render_error(result[:message])
+      when :persistence
+        return render_error("Errore nel salvataggio del file")
+      else
+        return render_error("Errore: #{result[:message]}")
+      end
+    end
 
     render json: {
-      status: "queued",
+      status: result[:status] || "queued",
       message: result[:message],
       job_id: result[:job_id]
     }
-  rescue DocumentProcessing::UploadManager::ValidationError => e
-    render_error(e.message)
-  rescue DocumentProcessing::UploadManager::PersistenceError
-    render_error("Errore nel salvataggio del file")
   rescue StandardError => e
     render_error("Errore: #{e.message}")
   end
@@ -65,7 +77,7 @@ class DocumentsController < ApplicationController
   # GET /documents/uploads
   # Restituisce la lista minimale degli uploaded document (id, original_filename, page_count, created_at)
   def uploads
-    list = DocumentProcessing::Persistence::DbManager.new.uploaded_documents_list
+    list = db_manager.uploaded_documents_list
     render json: { uploaded_documents: list }
   end
 
@@ -122,6 +134,10 @@ class DocumentsController < ApplicationController
       page_start: page_start,
       page_end: page_end
     )
+    if result.is_a?(Hash) && result[:ok] == false
+      return render_error(result[:message]) if result[:error] == :validation
+      return render_error("Errore: #{result[:message]}")
+    end
 
     render json: {
       status: "queued",
@@ -132,8 +148,6 @@ class DocumentsController < ApplicationController
     }
   rescue ActiveRecord::RecordNotFound
     render json: { status: "error", message: "Documento estratto non trovato" }, status: :not_found
-  rescue DocumentProcessing::Commands::ReassignExtractedRange::ValidationError => e
-    render_error(e.message)
   end
 
   # PATCH /documents/extracted/:id/metadata
@@ -155,7 +169,7 @@ class DocumentsController < ApplicationController
       return render json: { status: "error", message: "metadata_updates must be an object" }, status: :bad_request
     end
 
-    updated = DocumentProcessing::Persistence::DbManager.new.update_extracted_metadata(
+    updated = db_manager.update_extracted_metadata(
       extracted_document_id: params[:id],
       metadata_updates: metadata_updates
     )
@@ -197,6 +211,16 @@ class DocumentsController < ApplicationController
       department: params[:department],
       competence_period: params[:competence_period]
     )
+    if result.is_a?(Hash) && result[:ok] == false
+      case result[:error]
+      when :validation
+        return render_error(result[:message])
+      when :persistence
+        return render_error("Errore nel salvataggio del file")
+      else
+        return render_error("Errore: #{result[:message]}")
+      end
+    end
 
     render json: {
       status: result[:status] || "queued",
@@ -204,10 +228,6 @@ class DocumentsController < ApplicationController
       job_id: result[:job_id],
       uploaded_document_id: result[:uploaded_document_id]
     }
-  rescue DocumentProcessing::UploadManager::ValidationError => e
-    render_error(e.message)
-  rescue DocumentProcessing::UploadManager::PersistenceError
-    render_error("Errore nel salvataggio del file")
   rescue StandardError => e
     render_error("Errore: #{e.message}")
   end
@@ -244,49 +264,23 @@ class DocumentsController < ApplicationController
   end
 
   def page_range_pdf_service_class
-    DocumentProcessing::PageRangePdf
+    document_processing_container.page_range_pdf_service_class
   end
 
   def initialize_processing_command
-    initialize_processing_command_class.new(
-      upload_manager: upload_manager,
-      pdf_split_job_class: pdf_split_job_class
-    )
-  end
-
-  def initialize_processing_command_class
-    DocumentProcessing::Commands::InitializeProcessing
+    document_processing_container.initialize_processing_command
   end
 
   def initialize_file_processing_command
-    initialize_file_processing_command_class.new(upload_manager: upload_manager)
-  end
-
-  def initialize_file_processing_command_class
-    DocumentProcessing::Commands::InitializeFileProcessing
+    document_processing_container.initialize_file_processing_command
   end
 
   def enqueue_single_data_extraction_command
-    enqueue_single_data_extraction_command_class.new(
-      upload_manager: upload_manager,
-      data_extraction_job_class: data_extraction_job_class
-    )
-  end
-
-  def enqueue_single_data_extraction_command_class
-    DocumentProcessing::Commands::EnqueueSingleDataExtraction
+    document_processing_container.enqueue_single_data_extraction_command
   end
 
   def reassign_extracted_range_command
-    reassign_extracted_range_command_class.new(
-      page_range_pdf_service_class: page_range_pdf_service_class,
-      data_extraction_job_class: data_extraction_job_class,
-      file_storage: file_storage
-    )
-  end
-
-  def reassign_extracted_range_command_class
-    DocumentProcessing::Commands::ReassignExtractedRange
+    document_processing_container.reassign_extracted_range_command
   end
 
   def extracted_document_presenter(document)
@@ -297,24 +291,16 @@ class DocumentsController < ApplicationController
     DocumentProcessing::Presenters::ExtractedDocumentPresenter
   end
 
-  def upload_manager
-    upload_manager_class.new
-  end
-
-  def upload_manager_class
-    DocumentProcessing::UploadManager
-  end
-
   def file_storage
-    file_storage_class.new
+    document_processing_container.file_storage
   end
 
-  def file_storage_class
-    DocumentProcessing::Persistence::FileStorage
+  def db_manager
+    document_processing_container.db_manager
   end
 
-  def data_extraction_job_class
-    DataExtractionJob
+  def document_processing_container
+    @document_processing_container ||= DocumentProcessing::Container.new
   end
 
   def content_type_for_uploaded(uploaded_document)
@@ -333,7 +319,4 @@ class DocumentsController < ApplicationController
     end
   end
 
-  def pdf_split_job_class
-    PdfSplitJob
-  end
 end

@@ -1,18 +1,20 @@
 module DocumentProcessing
   class ImageProcessor
-    def initialize(container:)
-      @container = container
+    def initialize(ocr_service:, data_extractor:, recipient_resolver:)
+      @ocr_service = ocr_service
+      @data_extractor = data_extractor
+      @recipient_resolver = recipient_resolver
     end
 
     # Pure extraction for images: no DB writes, no broadcast.
     def extract(file_path)
-      ocr_result = container.ocr_service.full_ocr(file_path)
+      ocr_result = ocr_service.full_ocr(file_path)
       full_text = ocr_result[:text]
 
-      extracted = container.data_extractor.extract(full_text)
+      extracted = data_extractor.extract(full_text)
       recipient_names = extracted[:recipients]
       recipient = Array(recipient_names).compact.first
-      resolution = container.recipient_resolver.resolve(recipient_names: recipient_names, raw_text: full_text)
+      resolution = recipient_resolver.resolve(recipient_names: recipient_names, raw_text: full_text)
 
       {
         ocr_text: full_text,
@@ -25,6 +27,6 @@ module DocumentProcessing
 
     private
 
-    attr_reader :container
+    attr_reader :ocr_service, :data_extractor, :recipient_resolver
   end
 end

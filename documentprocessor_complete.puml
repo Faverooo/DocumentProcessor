@@ -1,0 +1,183 @@
+@startuml DocumentProcessorClassRelationsOnly
+
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+hide empty members
+
+legend right
+  |= Simbolo |= Tipo |
+  | <|-- | Ereditarieta |
+  | *-- | Composizione |
+  | o-- | Aggregazione |
+  | --  | Associazione |
+  | ..> | Dipendenza |
+endlegend
+
+' Inheritance
+ApplicationRecord <|-- Employee
+ApplicationRecord <|-- UploadedDocument
+ApplicationRecord <|-- ProcessingRun
+ApplicationRecord <|-- ProcessingItem
+ApplicationRecord <|-- ExtractedDocument
+ApplicationRecord <|-- Sending
+ApplicationRecord <|-- Template
+
+ApplicationController <|-- DocumentsController
+ApplicationController <|-- SendingsController
+ApplicationController <|-- TemplatesController
+ApplicationController <|-- LookupsController
+
+ApplicationJob <|-- PdfSplitJob
+ApplicationJob <|-- DataExtractionJob
+ApplicationJob <|-- GenericFileProcessingJob
+
+"ApplicationCable::Channel" <|-- DocumentProcessingChannel
+
+' Domain model relations
+UploadedDocument "1" *-- "0..*" ExtractedDocument
+ProcessingRun "1" *-- "0..*" ProcessingItem
+
+ProcessingRun "0..*" -- "0..1" UploadedDocument
+ProcessingItem "0..*" -- "0..1" ExtractedDocument
+ExtractedDocument "0..*" -- "0..1" Employee
+Sending "0..*" -- "1" Employee
+Sending "0..*" -- "1" ExtractedDocument
+Sending "0..*" -- "0..1" Template
+
+' Controller / Job dependencies (use Container)
+DocumentsController ..> "DocumentProcessing::Container"
+SendingsController ..> "DocumentProcessing::Container"
+TemplatesController ..> "DocumentProcessing::Container"
+LookupsController ..> "DocumentProcessing::Container"
+
+PdfSplitJob ..> "DocumentProcessing::Container"
+DataExtractionJob ..> "DocumentProcessing::Container"
+GenericFileProcessingJob ..> "DocumentProcessing::Container"
+
+' Keep direct model deps where controllers reference models directly
+DocumentsController ..> UploadedDocument
+DocumentsController ..> ExtractedDocument
+SendingsController ..> Sending
+SendingsController ..> Employee
+SendingsController ..> ExtractedDocument
+TemplatesController ..> Template
+
+' Container ownership & provided components
+"DocumentProcessing::Container" o-- "DocumentProcessing::Persistence::FileStorage"
+"DocumentProcessing::Container" o-- "DocumentProcessing::Persistence::SplitRunRepository"
+"DocumentProcessing::Container" o-- "DocumentProcessing::Persistence::DataItemRepository"
+"DocumentProcessing::Container" o-- "DocumentProcessing::UploadManager"
+
+' Container dependencies (services created by the container)
+"DocumentProcessing::Container" ..> "DocumentProcessing::Ocr"
+"DocumentProcessing::Container" ..> "DocumentProcessing::DataExtractor"
+"DocumentProcessing::Container" ..> "DocumentProcessing::RecipientResolver"
+"DocumentProcessing::Container" ..> "DocumentProcessing::PdfSplitter"
+"DocumentProcessing::Container" ..> "DocumentProcessing::ImageProcessor"
+"DocumentProcessing::Container" ..> "DocumentProcessing::CsvProcessor"
+"DocumentProcessing::Container" ..> "DocumentProcessing::ConfidenceCalculator"
+"DocumentProcessing::Container" ..> "DocumentProcessing::ExtractedMetadataBuilder"
+"DocumentProcessing::Container" ..> "DocumentProcessing::ActionCableNotifier"
+"DocumentProcessing::Container" ..> "DocumentProcessing::LlmService"
+"DocumentProcessing::Container" ..> "DocumentProcessing::PageRangePdf"
+"DocumentProcessing::Container" ..> "DocumentProcessing::Persistence::DbManager"
+"DocumentProcessing::Container" ..> "DocumentProcessing::ProcessSplitRun"
+"DocumentProcessing::Container" ..> "DocumentProcessing::ProcessDataItem"
+"DocumentProcessing::Container" ..> "DocumentProcessing::ProcessGenericFile"
+"DocumentProcessing::Container" ..> "DocumentProcessing::Commands::InitializeProcessing"
+"DocumentProcessing::Container" ..> "DocumentProcessing::Commands::InitializeFileProcessing"
+"DocumentProcessing::Container" ..> "DocumentProcessing::Commands::EnqueueSingleDataExtraction"
+"DocumentProcessing::Container" ..> "DocumentProcessing::Commands::ReassignExtractedRange"
+
+' Commands & persistence (show commands depend on models and, implicitly, container)
+"DocumentProcessing::Commands::InitializeProcessing" ..> UploadedDocument
+"DocumentProcessing::Commands::InitializeProcessing" ..> ProcessingRun
+"DocumentProcessing::Commands::InitializeProcessing" ..> PdfSplitJob
+"DocumentProcessing::Commands::InitializeProcessing" ..> "DocumentProcessing::Persistence::FileStorage"
+
+"DocumentProcessing::Commands::InitializeFileProcessing" ..> UploadedDocument
+"DocumentProcessing::Commands::InitializeFileProcessing" ..> ProcessingRun
+"DocumentProcessing::Commands::InitializeFileProcessing" ..> GenericFileProcessingJob
+"DocumentProcessing::Commands::InitializeFileProcessing" ..> "DocumentProcessing::Persistence::FileStorage"
+
+"DocumentProcessing::Commands::EnqueueSingleDataExtraction" ..> ProcessingRun
+"DocumentProcessing::Commands::EnqueueSingleDataExtraction" ..> ProcessingItem
+"DocumentProcessing::Commands::EnqueueSingleDataExtraction" ..> DataExtractionJob
+
+"DocumentProcessing::Commands::ReassignExtractedRange" ..> "DocumentProcessing::PageRangePdf"
+"DocumentProcessing::Commands::ReassignExtractedRange" ..> DataExtractionJob
+"DocumentProcessing::Commands::ReassignExtractedRange" ..> "DocumentProcessing::Persistence::FileStorage"
+"DocumentProcessing::Commands::ReassignExtractedRange" ..> ExtractedDocument
+
+' Services dependencies (internal service graph kept, since these are service→service relationships)
+"DocumentProcessing::ProcessSplitRun" ..> "DocumentProcessing::Persistence::SplitRunRepository"
+"DocumentProcessing::ProcessSplitRun" ..> "DocumentProcessing::ActionCableNotifier"
+"DocumentProcessing::ProcessSplitRun" ..> "DocumentProcessing::Persistence::FileStorage"
+"DocumentProcessing::ProcessSplitRun" ..> "DocumentProcessing::PdfSplitter"
+"DocumentProcessing::ProcessSplitRun" ..> DataExtractionJob
+
+"DocumentProcessing::ProcessDataItem" ..> "DocumentProcessing::Persistence::DataItemRepository"
+"DocumentProcessing::ProcessDataItem" ..> "DocumentProcessing::ActionCableNotifier"
+"DocumentProcessing::ProcessDataItem" ..> "DocumentProcessing::Persistence::FileStorage"
+"DocumentProcessing::ProcessDataItem" ..> "DocumentProcessing::Ocr"
+"DocumentProcessing::ProcessDataItem" ..> "DocumentProcessing::DataExtractor"
+"DocumentProcessing::ProcessDataItem" ..> "DocumentProcessing::RecipientResolver"
+"DocumentProcessing::ProcessDataItem" ..> "DocumentProcessing::ConfidenceCalculator"
+"DocumentProcessing::ProcessDataItem" ..> "DocumentProcessing::ExtractedMetadataBuilder"
+"DocumentProcessing::ProcessDataItem" ..> Employee
+
+"DocumentProcessing::ProcessGenericFile" ..> "DocumentProcessing::Persistence::DataItemRepository"
+"DocumentProcessing::ProcessGenericFile" ..> "DocumentProcessing::ActionCableNotifier"
+"DocumentProcessing::ProcessGenericFile" ..> "DocumentProcessing::Persistence::FileStorage"
+"DocumentProcessing::ProcessGenericFile" ..> "DocumentProcessing::ImageProcessor"
+"DocumentProcessing::ProcessGenericFile" ..> "DocumentProcessing::CsvProcessor"
+
+"DocumentProcessing::PdfSplitter" ..> "DocumentProcessing::Ocr"
+"DocumentProcessing::PdfSplitter" ..> "DocumentProcessing::LlmService"
+
+"DocumentProcessing::DataExtractor" ..> "DocumentProcessing::LlmService"
+
+"DocumentProcessing::ImageProcessor" ..> "DocumentProcessing::Ocr"
+"DocumentProcessing::ImageProcessor" ..> "DocumentProcessing::DataExtractor"
+"DocumentProcessing::ImageProcessor" ..> "DocumentProcessing::RecipientResolver"
+
+"DocumentProcessing::CsvProcessor" ..> "DocumentProcessing::DataExtractor"
+"DocumentProcessing::CsvProcessor" ..> "DocumentProcessing::RecipientResolver"
+
+"DocumentProcessing::RecipientResolver" ..> "DocumentProcessing::RecipientResolutionResult"
+"DocumentProcessing::RecipientResolver" ..> Employee
+
+"DocumentProcessing::ExtractedMetadataBuilder" ..> UploadedDocument
+
+"DocumentProcessing::ActionCableNotifier" ..> DocumentProcessingChannel
+
+' Persistence and lookup dependencies
+"DocumentProcessing::Persistence::SplitRunRepository" ..> ProcessingRun
+"DocumentProcessing::Persistence::SplitRunRepository" ..> ProcessingItem
+"DocumentProcessing::Persistence::SplitRunRepository" ..> ExtractedDocument
+
+"DocumentProcessing::Persistence::DataItemRepository" ..> ProcessingRun
+"DocumentProcessing::Persistence::DataItemRepository" ..> ProcessingItem
+"DocumentProcessing::Persistence::DataItemRepository" ..> ExtractedDocument
+"DocumentProcessing::Persistence::DataItemRepository" ..> UploadedDocument
+
+"DocumentProcessing::Persistence::DbManager" ..> "DocumentProcessing::Persistence::DataItemRepository"
+"DocumentProcessing::Persistence::DbManager" ..> "DocumentProcessing::RecipientResolver"
+"DocumentProcessing::Persistence::DbManager" ..> UploadedDocument
+"DocumentProcessing::Persistence::DbManager" ..> ExtractedDocument
+
+"DocumentProcessing::Lookups::CompaniesFetcher" ..> UploadedDocument
+"DocumentProcessing::Lookups::CompaniesFetcher" ..> ExtractedDocument
+
+"DocumentProcessing::Lookups::UsersFetcher" ..> Employee
+"DocumentProcessing::Lookups::UsersFetcher" ..> UploadedDocument
+"DocumentProcessing::Lookups::UsersFetcher" ..> ExtractedDocument
+
+"DocumentProcessing::Presenters::ExtractedDocumentPresenter" ..> ExtractedDocument
+"DocumentProcessing::Presenters::ExtractedDocumentPresenter" ..> Employee
+
+"DocumentProcessing::Sendings::CreateSending" ..> Sending
+"DocumentProcessing::Sendings::CreateSending" ..> Template
+"DocumentProcessing::Sendings::CreateSending" ..> ExtractedDocument
+
+@enduml

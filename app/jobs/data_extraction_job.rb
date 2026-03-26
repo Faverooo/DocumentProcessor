@@ -5,7 +5,7 @@ class DataExtractionJob < ApplicationJob
     options = normalize_options(job_context, processing_item_id, extracted_document_id)
 
     container = DocumentProcessing::Container.new
-    process_data_item_service.new(container:).call(
+    container.process_data_item_service.call(
       file_path:,
       job_id: options[:job_id],
       processing_item_id: options[:processing_item_id],
@@ -31,7 +31,4 @@ class DataExtractionJob < ApplicationJob
     end
   end
 
-  def process_data_item_service
-    DocumentProcessing::ProcessDataItem
-  end
 end

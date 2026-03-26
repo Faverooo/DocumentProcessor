@@ -86,7 +86,16 @@ class ProcessGenericFileTest < ActiveSupport::TestCase
 
     container = FakeContainer.new
 
-    DocumentProcessing::ProcessGenericFile.new(container: container).call(
+    csv_processor_factory = -> { DocumentProcessing::CsvProcessor.new(data_extractor: container.data_extractor, recipient_resolver: container.recipient_resolver) }
+    image_processor_factory = -> { DocumentProcessing::ImageProcessor.new(container: container) }
+
+    DocumentProcessing::ProcessGenericFile.new(
+      notifier: container.notifier,
+      file_storage: container.file_storage,
+      generic_file_repository: DocumentProcessing::Persistence::DataItemRepository.new,
+      image_processor_factory: image_processor_factory,
+      csv_processor_factory: csv_processor_factory
+    ).call(
       file_path: csv.path,
       job_id: run.job_id,
       uploaded_document_id: uploaded_document.id,
@@ -143,10 +152,19 @@ class ProcessGenericFileTest < ActiveSupport::TestCase
 
     container = FakeContainer.new
 
+    csv_processor_factory = -> { DocumentProcessing::CsvProcessor.new(data_extractor: container.data_extractor, recipient_resolver: container.recipient_resolver) }
+    image_processor_factory = -> { DocumentProcessing::ImageProcessor.new(container: container) }
+
     original_new = DocumentProcessing::ImageProcessor.method(:new)
     DocumentProcessing::ImageProcessor.define_singleton_method(:new) { |container:| fake_image_processor }
 
-    DocumentProcessing::ProcessGenericFile.new(container: container).call(
+    DocumentProcessing::ProcessGenericFile.new(
+      notifier: container.notifier,
+      file_storage: container.file_storage,
+      generic_file_repository: DocumentProcessing::Persistence::DataItemRepository.new,
+      image_processor_factory: image_processor_factory,
+      csv_processor_factory: csv_processor_factory
+    ).call(
       file_path: "/tmp/scan.png",
       job_id: run.job_id,
       uploaded_document_id: uploaded_document.id,

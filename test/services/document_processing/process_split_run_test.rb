@@ -104,7 +104,15 @@ class ProcessSplitRunTest < ActiveSupport::TestCase
     DataExtractionJob.define_singleton_method(:perform_later) { |*args| job_calls << args }
 
     begin
-      DocumentProcessing::ProcessSplitRun.new(container: container).call(file_path: "/tmp/source.pdf", job_id: "job-1")
+      pdf_splitter_factory = ->(pdf:) { container.pdf_splitter(pdf: pdf) }
+
+      DocumentProcessing::ProcessSplitRun.new(
+        split_run_repository: repository,
+        notifier: notifier,
+        file_storage: container.file_storage,
+        pdf_splitter_factory: pdf_splitter_factory,
+        data_extraction_job_class: DataExtractionJob
+      ).call(file_path: "/tmp/source.pdf", job_id: "job-1")
     ensure
       CombinePDF.define_singleton_method(:load, original_pdf_load)
       DataExtractionJob.define_singleton_method(:perform_later, original_job_perform)
@@ -130,7 +138,15 @@ class ProcessSplitRunTest < ActiveSupport::TestCase
     CombinePDF.define_singleton_method(:load) { |_path| pdf }
 
     begin
-      DocumentProcessing::ProcessSplitRun.new(container: container).call(file_path: "/tmp/source.pdf", job_id: "job-empty")
+      pdf_splitter_factory = ->(pdf:) { container.pdf_splitter(pdf: pdf) }
+
+      DocumentProcessing::ProcessSplitRun.new(
+        split_run_repository: repository,
+        notifier: notifier,
+        file_storage: container.file_storage,
+        pdf_splitter_factory: pdf_splitter_factory,
+        data_extraction_job_class: DataExtractionJob
+      ).call(file_path: "/tmp/source.pdf", job_id: "job-empty")
     ensure
       CombinePDF.define_singleton_method(:load, original_pdf_load)
     end
@@ -151,7 +167,15 @@ class ProcessSplitRunTest < ActiveSupport::TestCase
     CombinePDF.define_singleton_method(:load) { |_path| raise "boom" }
 
     begin
-      DocumentProcessing::ProcessSplitRun.new(container: container).call(file_path: "/tmp/source.pdf", job_id: "job-error")
+      pdf_splitter_factory = ->(pdf:) { container.pdf_splitter(pdf: pdf) }
+
+      DocumentProcessing::ProcessSplitRun.new(
+        split_run_repository: repository,
+        notifier: notifier,
+        file_storage: container.file_storage,
+        pdf_splitter_factory: pdf_splitter_factory,
+        data_extraction_job_class: DataExtractionJob
+      ).call(file_path: "/tmp/source.pdf", job_id: "job-error")
     ensure
       CombinePDF.define_singleton_method(:load, original_pdf_load)
     end

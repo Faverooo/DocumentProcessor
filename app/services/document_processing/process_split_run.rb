@@ -1,7 +1,17 @@
 module DocumentProcessing
   class ProcessSplitRun
-    def initialize(container:)
-      @container = container
+    def initialize(
+      split_run_repository:,
+      notifier:,
+      file_storage:,
+      pdf_splitter_factory:,
+      data_extraction_job_class: DataExtractionJob
+    )
+      @split_run_repository = split_run_repository
+      @notifier = notifier
+      @file_storage = file_storage
+      @pdf_splitter_factory = pdf_splitter_factory
+      @data_extraction_job_class = data_extraction_job_class
     end
 
     def call(file_path:, job_id:)
@@ -9,7 +19,7 @@ module DocumentProcessing
       split_run_repository.mark_splitting!(run)
 
       pdf = CombinePDF.load(file_path)
-      split_results = container.pdf_splitter(pdf: pdf).split
+      split_results = pdf_splitter_factory.call(pdf: pdf).split
 
       create_processing_items_and_enqueue(split_results, run)
 
@@ -40,11 +50,7 @@ module DocumentProcessing
 
     private
 
-    attr_reader :container
-
-    def notifier
-      container.notifier
-    end
+    attr_reader :split_run_repository, :notifier, :file_storage, :pdf_splitter_factory, :data_extraction_job_class
 
     def create_processing_items_and_enqueue(split_results, run)
       created_artifacts = split_run_repository.create_split_artifacts!(run:, split_results:)
@@ -70,16 +76,5 @@ module DocumentProcessing
       file_storage.delete(file_path)
     end
 
-    def data_extraction_job_class
-      DataExtractionJob
-    end
-
-    def split_run_repository
-      container.split_run_repository
-    end
-
-    def file_storage
-      container.file_storage
-    end
   end
 end

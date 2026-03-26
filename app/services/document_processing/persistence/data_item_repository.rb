@@ -106,6 +106,95 @@ module DocumentProcessing
           { completed: completed }
         end
       end
+      # Generic file repository compatibility methods used by ProcessGenericFile
+      def find_uploaded_document(id)
+        UploadedDocument.find_by(id: id)
+      end
+
+      def mark_run_processing!(run)
+        return unless run
+
+        run.with_lock do
+          run.reload
+          run.update!(status: "processing", started_at: Time.current)
+        end
+      end
+
+      def set_run_total!(run, total)
+        return unless run
+
+        run.with_lock do
+          run.reload
+          run.update!(total_documents: total)
+        end
+      end
+
+      def create_csv_item!(uploaded_document:, run:, sequence:, metadata:, confidence:, recipient:, employee:)
+        extracted = uploaded_document.extracted_documents.create!(
+          sequence: sequence,
+          page_start: 1,
+          page_end: 1,
+          status: "done",
+          metadata: metadata,
+          recipient: recipient,
+          confidence: confidence,
+          processed_at: Time.current,
+          matched_employee: employee
+        )
+
+        item = run.processing_items.create!(
+          sequence: sequence,
+          filename: "#{uploaded_document.original_filename}-row#{sequence}",
+          status: "done",
+          extracted_document: extracted
+        )
+
+        [extracted, item]
+      end
+
+      def create_image_item!(uploaded_document:, run:, metadata:, confidence:, recipient:, employee:)
+        extracted = uploaded_document.extracted_documents.create!(
+          sequence: 1,
+          page_start: 1,
+          page_end: 1,
+          status: "done",
+          metadata: metadata,
+          recipient: recipient,
+          confidence: confidence,
+          processed_at: Time.current,
+          matched_employee: employee
+        )
+
+        item = run.processing_items.create!(
+          sequence: 1,
+          filename: uploaded_document.original_filename,
+          status: "done",
+          extracted_document: extracted
+        )
+
+        [extracted, item]
+      end
+
+      def mark_run_completed!(run, processed_documents:)
+        return unless run
+
+        run.with_lock do
+          run.reload
+          run.update!(processed_documents: processed_documents, status: "completed", completed_at: Time.current)
+        end
+      end
+
+      def mark_run_failed!(run, error_message:)
+        run&.update(status: "failed", error_message: error_message, completed_at: Time.current)
+      end
+
+      def reload_run(run)
+        run.reload
+      end
+
+      def transaction(&block)
+        ProcessingRun.transaction(&block)
+      end
     end
   end
 end

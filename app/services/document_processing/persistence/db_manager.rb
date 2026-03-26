@@ -1,9 +1,9 @@
 module DocumentProcessing
   module Persistence
     class DbManager
-      def initialize(data_item_repository: nil, recipient_resolver: nil)
-        @repo = data_item_repository || DocumentProcessing::Persistence::DataItemRepository.new
-        @recipient_resolver = recipient_resolver || DocumentProcessing::RecipientResolver.new
+      def initialize(data_item_repository:, recipient_resolver:)
+        @repo = data_item_repository
+        @recipient_resolver = recipient_resolver
       end
 
       # Restituisce tutti i documenti caricati (minimo payload)

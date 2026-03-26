@@ -1,13 +1,24 @@
 module DocumentProcessing
   class ProcessGenericFile
-    def initialize(container:)
-      @container = container
+    def initialize(
+      notifier: nil,
+      file_storage: nil,
+      generic_file_repository: nil,
+      image_processor_factory:,
+      csv_processor_factory:
+    )
+      @notifier = notifier
+      @file_storage = file_storage
+      @generic_file_repository = generic_file_repository
+      @image_processor_factory = image_processor_factory
+      @csv_processor_factory = csv_processor_factory
     end
 
     def call(file_path:, job_id:, uploaded_document_id:, file_kind:, category: nil, override_company: nil, override_department: nil, competence_period: nil)
-      uploaded_document = UploadedDocument.find(uploaded_document_id)
-      run = ProcessingRun.find_by!(job_id: job_id)
-      run.update!(status: "processing", started_at: Time.current)
+      uploaded_document = generic_file_repository.find_uploaded_document(uploaded_document_id)
+      run = generic_file_repository.find_run_by_job_id(job_id)
+      raise ActiveRecord::RecordNotFound, "ProcessingRun not found for job_id=#{job_id}" unless run
+      generic_file_repository.mark_run_processing!(run)
 
       # Build overlay params: user-provided values that override LLM extraction
       overlays = {
@@ -39,15 +50,8 @@ module DocumentProcessing
 
     private
 
-    attr_reader :container
-
-    def notifier
-      container.notifier
-    end
-
-    def file_storage
-      container.file_storage
-    end
+    attr_reader :notifier, :file_storage, :generic_file_repository,
+      :image_processor_factory, :csv_processor_factory
 
     # Apply user-provided overrides to LLM extraction results
     # User overlays take precedence and get confidence = 1.0
@@ -79,42 +83,27 @@ module DocumentProcessing
     end
 
     def process_csv(file_path, uploaded_document, run, overlays)
-      processor = DocumentProcessing::CsvProcessor.new
-      extracted_rows = processor.extract_rows(file_path, container)
-      events = []
+      processor = build_csv_processor
+      extracted_rows = processor.extract_rows(file_path)
 
-      ProcessingRun.transaction do
-        run.update!(total_documents: extracted_rows.size)
+      generic_file_repository.transaction do
+        generic_file_repository.set_run_total!(run, extracted_rows.size)
 
-        extracted_rows.each_with_index do |result, idx|
+        events = extracted_rows.each_with_index.map do |result, idx|
           seq = idx + 1
-          extracted = uploaded_document.extracted_documents.create!(
-            sequence: seq,
-            page_start: 1,
-            page_end: 1,
-            status: "queued"
-          )
-          item = run.processing_items.create!(
-            sequence: seq,
-            filename: "#{uploaded_document.original_filename}-row#{seq}",
-            status: "queued",
-            extracted_document: extracted
-          )
-
-          # Apply user overrides (user values + confidence = 1.0)
           merged_metadata, merged_confidence = apply_user_overlays(result[:metadata], result[:confidence], overlays)
 
-          extracted.update!(
+          extracted, item = generic_file_repository.create_csv_item!(
+            uploaded_document: uploaded_document,
+            run: run,
+            sequence: seq,
             metadata: merged_metadata,
-            recipient: result[:recipient],
             confidence: merged_confidence,
-            status: "done",
-            processed_at: Time.current,
-            matched_employee: result[:employee]
+            recipient: result[:recipient],
+            employee: result[:employee]
           )
-          item.update!(status: "done")
 
-          events << build_success_payload(
+          build_success_payload(
             filename: uploaded_document.original_filename,
             recipient: result[:recipient],
             extracted_document_data: merged_metadata,
@@ -127,42 +116,31 @@ module DocumentProcessing
           )
         end
 
-        run.update!(processed_documents: extracted_rows.size, status: "completed", completed_at: Time.current)
+        generic_file_repository.mark_run_completed!(run, processed_documents: extracted_rows.size)
+        events
       end
-
-      events
     end
 
     def process_image(file_path, uploaded_document, run, overlays)
-      result = DocumentProcessing::ImageProcessor.new(container: container).extract(file_path)
+      result = build_image_processor.extract(file_path)
 
       # Apply user overrides (user values + confidence = 1.0)
       merged_metadata, merged_confidence = apply_user_overlays(result[:metadata], result[:confidence], overlays)
 
-      extracted = nil
-      ProcessingRun.transaction do
-        run.update!(total_documents: 1)
+      extracted = generic_file_repository.transaction do
+        generic_file_repository.set_run_total!(run, 1)
 
-        extracted = uploaded_document.extracted_documents.create!(
-          sequence: 1,
-          page_start: 1,
-          page_end: 1,
-          status: "done",
+        extracted, _item = generic_file_repository.create_image_item!(
+          uploaded_document: uploaded_document,
+          run: run,
           metadata: merged_metadata,
+          confidence: merged_confidence,
           recipient: result[:recipient],
-          confidence: merged_confidence || {},
-          processed_at: Time.current,
-          matched_employee: result[:employee]
+          employee: result[:employee]
         )
 
-        run.processing_items.create!(
-          sequence: 1,
-          filename: uploaded_document.original_filename,
-          status: "done",
-          extracted_document: extracted
-        )
-
-        run.update!(processed_documents: 1, status: "completed", completed_at: Time.current)
+        generic_file_repository.mark_run_completed!(run, processed_documents: 1)
+        extracted
       end
 
       [build_success_payload(
@@ -176,6 +154,22 @@ module DocumentProcessing
         total_documents: 1,
         ocr_text: result[:ocr_text]
       )]
+    end
+
+    def build_image_processor
+      unless image_processor_factory&.respond_to?(:call)
+        raise ArgumentError, "image_processor_factory must be provided and respond to :call"
+      end
+
+      image_processor_factory.call
+    end
+
+    def build_csv_processor
+      unless csv_processor_factory&.respond_to?(:call)
+        raise ArgumentError, "csv_processor_factory must be provided and respond to :call"
+      end
+
+      csv_processor_factory.call
     end
 
     def build_success_payload(filename:, recipient:, extracted_document_data:, extracted_confidence:, matched_recipient:, extracted_document_id:, document_index:, total_documents:, ocr_text: nil)

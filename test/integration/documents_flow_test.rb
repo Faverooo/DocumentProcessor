@@ -10,9 +10,11 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
       }
     )
 
-    DocumentProcessing::Commands::InitializeProcessing.stub(:new, command) do
-      post split_documents_path, params: { pdf: uploaded_pdf_file }
-    end
+    allow_any_instance_of(DocumentsController)
+      .to receive(:initialize_processing_command)
+      .and_return(command)
+
+    post split_documents_path, params: { pdf: uploaded_pdf_file }
 
     assert_response :success
     body = JSON.parse(response.body)
@@ -24,9 +26,11 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
   test "split returns bad request when command raises validation error" do
     command = FakeCommand.new(error: DocumentProcessing::UploadManager::ValidationError.new("Formato non valido: carica un PDF"))
 
-    DocumentProcessing::Commands::InitializeProcessing.stub(:new, command) do
-      post split_documents_path, params: { pdf: uploaded_pdf_file }
-    end
+    allow_any_instance_of(DocumentsController)
+      .to receive(:initialize_processing_command)
+      .and_return(command)
+
+    post split_documents_path, params: { pdf: uploaded_pdf_file }
 
     assert_response :bad_request
     body = JSON.parse(response.body)
@@ -44,9 +48,11 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
       }
     )
 
-    DocumentProcessing::Commands::InitializeFileProcessing.stub(:new, command) do
-      post process_file_documents_path, params: { file: uploaded_csv_file }
-    end
+    allow_any_instance_of(DocumentsController)
+      .to receive(:initialize_file_processing_command)
+      .and_return(command)
+
+    post process_file_documents_path, params: { file: uploaded_csv_file }
 
     assert_response :success
     body = JSON.parse(response.body)
@@ -58,9 +64,11 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
   test "process_file returns bad request when command raises validation error" do
     command = FakeCommand.new(error: DocumentProcessing::UploadManager::ValidationError.new("Formato non supportato"))
 
-    DocumentProcessing::Commands::InitializeFileProcessing.stub(:new, command) do
-      post process_file_documents_path, params: { file: uploaded_csv_file }
-    end
+    allow_any_instance_of(DocumentsController)
+      .to receive(:initialize_file_processing_command)
+      .and_return(command)
+
+    post process_file_documents_path, params: { file: uploaded_csv_file }
 
     assert_response :bad_request
     body = JSON.parse(response.body)
@@ -78,9 +86,11 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
       }
     )
 
-    DocumentProcessing::Commands::InitializeFileProcessing.stub(:new, command) do
-      post process_file_documents_path, params: { file: uploaded_csv_file }
-    end
+    allow_any_instance_of(DocumentsController)
+      .to receive(:initialize_file_processing_command)
+      .and_return(command)
+
+    post process_file_documents_path, params: { file: uploaded_csv_file }
 
     assert_response :success
     body = JSON.parse(response.body)
@@ -92,9 +102,11 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
   test "process_file rejects pdf on generic endpoint" do
     command = FakeCommand.new(error: DocumentProcessing::UploadManager::ValidationError.new("Per i PDF usa l'endpoint /documents/split"))
 
-    DocumentProcessing::Commands::InitializeFileProcessing.stub(:new, command) do
-      post process_file_documents_path, params: { file: uploaded_pdf_file }
-    end
+    allow_any_instance_of(DocumentsController)
+      .to receive(:initialize_file_processing_command)
+      .and_return(command)
+
+    post process_file_documents_path, params: { file: uploaded_pdf_file }
 
     assert_response :bad_request
     body = JSON.parse(response.body)
@@ -106,7 +118,9 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
     uploaded_document = UploadedDocument.create!(
       original_filename: "source.pdf",
       storage_path: "/tmp/source.pdf",
-      page_count: 10
+      page_count: 10,
+      checksum: "df-reassign-1",
+      file_kind: "pdf"
     )
     extracted_document = uploaded_document.extracted_documents.create!(
       sequence: 1,
@@ -124,9 +138,11 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
       }
     )
 
-    DocumentProcessing::Commands::ReassignExtractedRange.stub(:new, command) do
-      patch reassign_extracted_document_range_path(id: extracted_document.id), params: { page_start: 3, page_end: 5 }
-    end
+    allow_any_instance_of(DocumentsController)
+      .to receive(:reassign_extracted_range_command)
+      .and_return(command)
+
+    patch reassign_extracted_document_range_path(id: extracted_document.id), params: { page_start: 3, page_end: 5 }
 
     assert_response :success
     body = JSON.parse(response.body)
@@ -139,9 +155,11 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
   test "reassign_range returns not found when command raises record not found" do
     command = FakeCommand.new(error: ActiveRecord::RecordNotFound.new("not found"))
 
-    DocumentProcessing::Commands::ReassignExtractedRange.stub(:new, command) do
-      patch reassign_extracted_document_range_path(id: 999_999), params: { page_start: 1, page_end: 2 }
-    end
+    allow_any_instance_of(DocumentsController)
+      .to receive(:reassign_extracted_range_command)
+      .and_return(command)
+
+    patch reassign_extracted_document_range_path(id: 999_999), params: { page_start: 1, page_end: 2 }
 
     assert_response :not_found
     body = JSON.parse(response.body)
@@ -152,7 +170,9 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
     uploaded_document = UploadedDocument.create!(
       original_filename: "source.pdf",
       storage_path: "/tmp/not_existing_source.pdf",
-      page_count: 3
+      page_count: 3,
+      checksum: "df-extracted-1",
+      file_kind: "pdf"
     )
     extracted_document = uploaded_document.extracted_documents.create!(
       sequence: 1,
@@ -227,14 +247,13 @@ class DocumentsFlowTest < ActionDispatch::IntegrationTest
   end
 
   class FakeCommand
-    def initialize(result: nil, error: nil)
+    def initialize(*args, result: nil, error: nil, **kwargs)
       @result = result
       @error = error
     end
 
     def call(**)
       raise @error if @error
-
       @result
     end
   end

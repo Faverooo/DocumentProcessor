@@ -1,7 +1,23 @@
 module DocumentProcessing
   class ProcessDataItem
-    def initialize(container:)
-      @container = container
+    def initialize(
+      data_item_repository:,
+      notifier:,
+      file_storage:,
+      ocr_service:,
+      data_extractor:,
+      recipient_resolver:,
+      confidence_calculator_factory:,
+      extracted_metadata_builder_factory:
+    )
+      @data_item_repository = data_item_repository
+      @notifier = notifier
+      @file_storage = file_storage
+      @ocr_service = ocr_service
+      @data_extractor = data_extractor
+      @recipient_resolver = recipient_resolver
+      @confidence_calculator_factory = confidence_calculator_factory
+      @extracted_metadata_builder_factory = extracted_metadata_builder_factory
     end
 
     def call(file_path:, job_id:, processing_item_id: nil, extracted_document_id: nil)
@@ -15,17 +31,17 @@ module DocumentProcessing
       data_item_repository.mark_item_in_progress!(item)
       data_item_repository.mark_extracted_document_in_progress!(extracted_document)
 
-      ocr_result = container.ocr_service.full_ocr(file_path)
+      ocr_result = ocr_service.full_ocr(file_path)
       full_text = ocr_result[:text]
       ocr_lines = ocr_result[:lines]
 
-      extracted_data = container.data_extractor.extract(full_text)
+      extracted_data = data_extractor.extract(full_text)
       recipient_names = extracted_data[:recipients]
       # Normalize to single recipient: take first extracted name if any
       recipient = Array(recipient_names).compact.first
       extracted_document_data = extracted_data[:metadata]
       llm_confidence = extracted_data[:llm_confidence]
-      final_global_confidence = container.confidence_calculator(
+      final_global_confidence = confidence_calculator_factory.call(
         ocr_lines: ocr_lines,
         recipient_names: recipient_names,
         metadata: extracted_document_data,
@@ -33,7 +49,7 @@ module DocumentProcessing
         uploaded_document: extracted_document&.uploaded_document
       ).global_confidence
 
-      resolution = container.recipient_resolver.resolve(recipient_names:, raw_text: full_text)
+      resolution = recipient_resolver.resolve(recipient_names:, raw_text: full_text)
 
       data_item_repository.mark_item_done!(item:, resolution:)
       duration = Time.now - start_time
@@ -78,11 +94,8 @@ module DocumentProcessing
 
     private
 
-    attr_reader :container
-
-    def notifier
-      container.notifier
-    end
+    attr_reader :data_item_repository, :notifier, :file_storage, :ocr_service, :data_extractor, :recipient_resolver,
+      :confidence_calculator_factory, :extracted_metadata_builder_factory
 
     def resolve_extracted_document(extracted_document_id, item) #cerca prima su extraced_document_id, poi su item.associated extracted_document, nil se non trova nulla
       return data_item_repository.find_extracted_document(extracted_document_id) if extracted_document_id.present?
@@ -95,7 +108,7 @@ module DocumentProcessing
       return unless extracted_document
 
       uploaded_document = extracted_document.uploaded_document
-      metadata_builder = container.extracted_metadata_builder(metadata:, uploaded_document:)
+      metadata_builder = extracted_metadata_builder_factory.call(metadata:, uploaded_document:)
 
       data_item_repository.mark_extracted_document_done!(
         extracted_document: extracted_document,
@@ -116,13 +129,6 @@ module DocumentProcessing
         event: "processing_completed",
         status: "success"
       )
-    end
-    def data_item_repository
-      container.data_item_repository
-    end
-
-    def file_storage
-      container.file_storage
     end
 
     def format_employee(employee)

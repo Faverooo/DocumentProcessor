@@ -39,7 +39,8 @@ class InitializeFileProcessingTest < ActiveSupport::TestCase
 
     command = DocumentProcessing::Commands::InitializeFileProcessing.new(
       upload_manager: upload_manager,
-      generic_file_processing_job_class: FakeJob
+      generic_file_processing_job_class: FakeJob,
+      file_storage: DocumentProcessing::Persistence::FileStorage.new
     )
 
     result = command.call(file: file)

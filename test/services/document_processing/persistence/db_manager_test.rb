@@ -27,7 +27,10 @@ class DocumentProcessing::Persistence::DbManagerTest < ActiveSupport::TestCase
     UploadedDocument.create!(original_filename: "a.pdf", storage_path: "/tmp/a", page_count: 1, checksum: "dbm-1", file_kind: "pdf")
     UploadedDocument.create!(original_filename: "b.csv", storage_path: "/tmp/b", page_count: 1, checksum: "dbm-2", file_kind: "csv")
 
-    manager = DocumentProcessing::Persistence::DbManager.new
+    manager = DocumentProcessing::Persistence::DbManager.new(
+      data_item_repository: DocumentProcessing::Persistence::DataItemRepository.new,
+      recipient_resolver: nil
+    )
     list = manager.uploaded_documents_list
 
     filenames = list.map { |row| row[:original_filename] }
@@ -58,6 +61,7 @@ class DocumentProcessing::Persistence::DbManagerTest < ActiveSupport::TestCase
     )
 
     manager = DocumentProcessing::Persistence::DbManager.new(
+      data_item_repository: DocumentProcessing::Persistence::DataItemRepository.new,
       recipient_resolver: FakeRecipientResolver.new(employee)
     )
 

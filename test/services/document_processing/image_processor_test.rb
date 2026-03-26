@@ -51,7 +51,11 @@ class ImageProcessorTest < ActiveSupport::TestCase
   end
 
   test "extract returns normalized payload" do
-    processor = DocumentProcessing::ImageProcessor.new(container: FakeContainer.new)
+    processor = DocumentProcessing::ImageProcessor.new(
+      ocr_service: FakeOcrService.new,
+      data_extractor: FakeDataExtractor.new,
+      recipient_resolver: FakeRecipientResolver.new
+    )
 
     result = processor.extract("/tmp/fake.png")
 

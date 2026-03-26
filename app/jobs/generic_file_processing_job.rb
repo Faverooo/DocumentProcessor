@@ -5,7 +5,7 @@ class GenericFileProcessingJob < ApplicationJob
     context = normalize_context(job_context)
     container = DocumentProcessing::Container.new
 
-    DocumentProcessing::ProcessGenericFile.new(container: container).call(
+    container.process_generic_file_service.call(
       file_path: file_path,
       job_id: context[:job_id],
       uploaded_document_id: context[:uploaded_document_id],

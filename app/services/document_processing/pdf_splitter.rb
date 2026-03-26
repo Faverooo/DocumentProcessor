@@ -2,10 +2,10 @@ module DocumentProcessing
   class PdfSplitter
     PREVIEW_LINES = 8
 
-    def initialize(pdf:, ocr_service:, llm_service: nil, bedrock_client: Aws::BedrockRuntime::Client.new)
+    def initialize(pdf:, ocr_service:, llm_service:)
       @pdf = pdf
       @ocr_service = ocr_service
-      @llm_service = llm_service || DocumentProcessing::LlmService.new(bedrock_client: bedrock_client)
+      @llm_service = llm_service
     end
 
     def split

@@ -1,7 +1,7 @@
 module DocumentProcessing
   class DataExtractor
-    def initialize(llm_service: nil, bedrock_client: Aws::BedrockRuntime::Client.new)
-      @llm_service = llm_service || DocumentProcessing::LlmService.new(bedrock_client: bedrock_client)
+    def initialize(llm_service:)
+      @llm_service = llm_service
     end
 
     def extract(text)

@@ -162,7 +162,16 @@ class ProcessDataItemTest < ActiveSupport::TestCase
     file_storage = FakeFileStorage.new
     container = FakeContainer.new(repo: repo, notifier: notifier, file_storage: file_storage, employee: employee)
 
-    DocumentProcessing::ProcessDataItem.new(container: container).call(
+    DocumentProcessing::ProcessDataItem.new(
+      data_item_repository: container.data_item_repository,
+      notifier: container.notifier,
+      file_storage: container.file_storage,
+      ocr_service: container.ocr_service,
+      data_extractor: container.data_extractor,
+      recipient_resolver: container.recipient_resolver,
+      confidence_calculator_factory: container.method(:confidence_calculator),
+      extracted_metadata_builder_factory: container.method(:extracted_metadata_builder)
+    ).call(
       file_path: "/tmp/x.pdf",
       job_id: "job-pdi",
       processing_item_id: item.id,

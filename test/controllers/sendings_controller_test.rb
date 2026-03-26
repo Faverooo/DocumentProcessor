@@ -3,7 +3,7 @@ require "test_helper"
 class SendingsControllerTest < ActionDispatch::IntegrationTest
   test "create sending and list sendings" do
     recipient = Employee.create!(name: "Gino", email: "gino@x.it", employee_code: "G1")
-    ud = UploadedDocument.create!(original_filename: "a.pdf", storage_path: "/tmp/a", page_count: 1, checksum: "ch10")
+    ud = UploadedDocument.create!(original_filename: "a.pdf", storage_path: "/tmp/a", page_count: 1, checksum: "ch10", file_kind: "pdf")
     ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
 
     post "/sendings", params: {
