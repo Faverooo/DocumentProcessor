@@ -28,7 +28,6 @@ module DocumentProcessing
           page_end: page_end,
           status: "queued",
           metadata: {},
-          recipients: [],
           recipient: nil,
           confidence: {},
           matched_employee: nil,

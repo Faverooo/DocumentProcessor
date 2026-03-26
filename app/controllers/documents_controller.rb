@@ -169,6 +169,23 @@ class DocumentsController < ApplicationController
     render_error("Errore: #{e.message}")
   end
 
+  # PATCH /documents/extracted/:id/validate
+  def validate_extracted
+    extracted_document = ExtractedDocument.find(params[:id])
+
+    unless extracted_document.done?
+      return render json: { status: "error", message: "Only documents in 'done' state can be validated" }, status: :bad_request
+    end
+
+    if extracted_document.update(status: "validated")
+      render json: { status: "ok", extracted_document: extracted_document_presenter(extracted_document).as_json }
+    else
+      render json: { status: "error", message: extracted_document.errors.full_messages.join(", ") }, status: :unprocessable_entity
+    end
+  rescue ActiveRecord::RecordNotFound
+    render json: { status: "error", message: "Documento estratto non trovato" }, status: :not_found
+  end
+
   # POST /documents/process_file
   # Receives a single file (csv, jpeg, png) and processes it without performing split.
   # Returns: { status: 'ok', job_id: '<uuid>' }

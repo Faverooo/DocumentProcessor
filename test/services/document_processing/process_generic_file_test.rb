@@ -42,6 +42,26 @@ class ProcessGenericFileTest < ActiveSupport::TestCase
     def recipient_resolver
       FakeRecipientResolver.new
     end
+
+    def data_extractor
+      Object.new.tap do |extractor|
+        extractor.define_singleton_method(:extract) do |text|
+          recipient = text.include?("Mario Rossi") ? "Mario Rossi" : nil
+          {
+            recipients: [recipient].compact,
+            metadata: { amount: "100" },
+            llm_confidence: { recipient: 0.9 }
+          }
+        end
+      end
+    end
+
+    def file_storage
+      Object.new.tap do |storage|
+        storage.define_singleton_method(:exist?) { |_path| false }
+        storage.define_singleton_method(:delete) { |_path| true }
+      end
+    end
   end
 
   test "csv processing emits uniform document_processed payload" do
@@ -49,7 +69,8 @@ class ProcessGenericFileTest < ActiveSupport::TestCase
       original_filename: "records.csv",
       storage_path: "/tmp/records.csv",
       page_count: 1,
-      checksum: "csv-checksum-1"
+      checksum: "csv-checksum-1",
+      file_kind: "csv"
     )
 
     run = ProcessingRun.create!(
@@ -96,7 +117,8 @@ class ProcessGenericFileTest < ActiveSupport::TestCase
       original_filename: "scan.png",
       storage_path: "/tmp/scan.png",
       page_count: 1,
-      checksum: "img-checksum-1"
+      checksum: "img-checksum-1",
+      file_kind: "image"
     )
 
     run = ProcessingRun.create!(
@@ -121,14 +143,17 @@ class ProcessGenericFileTest < ActiveSupport::TestCase
 
     container = FakeContainer.new
 
-    DocumentProcessing::ImageProcessor.stub(:new, fake_image_processor) do
-      DocumentProcessing::ProcessGenericFile.new(container: container).call(
-        file_path: "/tmp/scan.png",
-        job_id: run.job_id,
-        uploaded_document_id: uploaded_document.id,
-        file_kind: "image"
-      )
-    end
+    original_new = DocumentProcessing::ImageProcessor.method(:new)
+    DocumentProcessing::ImageProcessor.define_singleton_method(:new) { |container:| fake_image_processor }
+
+    DocumentProcessing::ProcessGenericFile.new(container: container).call(
+      file_path: "/tmp/scan.png",
+      job_id: run.job_id,
+      uploaded_document_id: uploaded_document.id,
+      file_kind: "image"
+    )
+  ensure
+    DocumentProcessing::ImageProcessor.define_singleton_method(:new, original_new)
 
     document_event = container.notifier.events.find { |_job_id, payload| payload[:event] == "document_processed" }
     completed_event = container.notifier.events.find { |_job_id, payload| payload[:event] == "processing_completed" }

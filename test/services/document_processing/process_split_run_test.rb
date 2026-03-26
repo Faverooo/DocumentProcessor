@@ -97,10 +97,17 @@ class ProcessSplitRunTest < ActiveSupport::TestCase
     pdf = Struct.new(:pages).new([1, 2])
     job_calls = []
 
-    CombinePDF.stub(:load, pdf) do
-      DataExtractionJob.stub(:perform_later, ->(*args) { job_calls << args }) do
-        DocumentProcessing::ProcessSplitRun.new(container: container).call(file_path: "/tmp/source.pdf", job_id: "job-1")
-      end
+    original_pdf_load = CombinePDF.method(:load)
+    original_job_perform = DataExtractionJob.method(:perform_later)
+
+    CombinePDF.define_singleton_method(:load) { |_path| pdf }
+    DataExtractionJob.define_singleton_method(:perform_later) { |*args| job_calls << args }
+
+    begin
+      DocumentProcessing::ProcessSplitRun.new(container: container).call(file_path: "/tmp/source.pdf", job_id: "job-1")
+    ensure
+      CombinePDF.define_singleton_method(:load, original_pdf_load)
+      DataExtractionJob.define_singleton_method(:perform_later, original_job_perform)
     end
 
     assert_equal 1, job_calls.size
@@ -119,8 +126,13 @@ class ProcessSplitRunTest < ActiveSupport::TestCase
 
     pdf = Struct.new(:pages).new([])
 
-    CombinePDF.stub(:load, pdf) do
+    original_pdf_load = CombinePDF.method(:load)
+    CombinePDF.define_singleton_method(:load) { |_path| pdf }
+
+    begin
       DocumentProcessing::ProcessSplitRun.new(container: container).call(file_path: "/tmp/source.pdf", job_id: "job-empty")
+    ensure
+      CombinePDF.define_singleton_method(:load, original_pdf_load)
     end
 
     assert_equal 2, notifier.events.size
@@ -135,8 +147,13 @@ class ProcessSplitRunTest < ActiveSupport::TestCase
     notifier = FakeNotifier.new
     container = FakeContainer.new(split_run_repository: repository, notifier: notifier, split_results: [])
 
-    CombinePDF.stub(:load, ->(_path) { raise "boom" }) do
+    original_pdf_load = CombinePDF.method(:load)
+    CombinePDF.define_singleton_method(:load) { |_path| raise "boom" }
+
+    begin
       DocumentProcessing::ProcessSplitRun.new(container: container).call(file_path: "/tmp/source.pdf", job_id: "job-error")
+    ensure
+      CombinePDF.define_singleton_method(:load, original_pdf_load)
     end
 
     assert_equal "boom", repository.failed_error_message

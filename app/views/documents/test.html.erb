@@ -526,7 +526,8 @@
       <details>
         <summary>Item (${items.length})</summary>
         ${items.length === 0 ? '<div class="dp-empty">Nessun item.</div>' : items.map((item) => {
-          const matched = item.matched_employee ? `${item.matched_employee.name} (${item.matched_employee.email || 'no email'})` : 'no match';
+          const matchedEmployee = item.extracted_document && item.extracted_document.matched_employee ? item.extracted_document.matched_employee : (item.matched_employee || null);
+          const matched = matchedEmployee ? `${matchedEmployee.name} (${matchedEmployee.email || 'no email'})` : 'no match';
           return `
             <div class="dp-item" style="margin-top:8px;padding:8px;">
               <div><strong>#${escapeHtml(String(item.sequence))}</strong> ${escapeHtml(item.filename || 'n/a')}</div>

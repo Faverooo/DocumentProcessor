@@ -1,12 +1,12 @@
 require "test_helper"
 
-class Sendings::CreateSendingTest < ActiveSupport::TestCase
+class DocumentProcessing::Sendings::CreateSendingTest < ActiveSupport::TestCase
   test "creates sending successfully with subject" do
     recipient = Employee.create!(name: "Mario", email: "mario@x.it", employee_code: "M1")
-    ud = UploadedDocument.create!(original_filename: "a.pdf", storage_path: "/tmp/a", page_count: 1, checksum: "ch20")
+    ud = UploadedDocument.create!(original_filename: "a.pdf", storage_path: "/tmp/a", page_count: 1, checksum: "ch20", file_kind: "pdf")
     ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
 
-    result = Sendings::CreateSending.new(
+    result = DocumentProcessing::Sendings::CreateSending.new(
       extracted_document_id: ed.id,
       recipient_id: recipient.id,
       sent_at: Time.current,
@@ -19,10 +19,10 @@ class Sendings::CreateSendingTest < ActiveSupport::TestCase
 
   test "creates sending successfully with custom body" do
     recipient = Employee.create!(name: "Mario", email: "mario-body@x.it", employee_code: "M1B")
-    ud = UploadedDocument.create!(original_filename: "ab.pdf", storage_path: "/tmp/ab", page_count: 1, checksum: "ch20b")
+    ud = UploadedDocument.create!(original_filename: "ab.pdf", storage_path: "/tmp/ab", page_count: 1, checksum: "ch20b", file_kind: "pdf")
     ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
 
-    result = Sendings::CreateSending.new(
+    result = DocumentProcessing::Sendings::CreateSending.new(
       extracted_document_id: ed.id,
       recipient_id: recipient.id,
       sent_at: Time.current,
@@ -36,11 +36,11 @@ class Sendings::CreateSendingTest < ActiveSupport::TestCase
 
   test "creates sending and inherits subject from template" do
     recipient = Employee.create!(name: "Mario", email: "mario@x.it", employee_code: "M2")
-    ud = UploadedDocument.create!(original_filename: "b.pdf", storage_path: "/tmp/b", page_count: 1, checksum: "ch21")
+    ud = UploadedDocument.create!(original_filename: "b.pdf", storage_path: "/tmp/b", page_count: 1, checksum: "ch21", file_kind: "pdf")
     ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
     template = Template.create!(subject: "Template Subject", body: "Template body")
 
-    result = Sendings::CreateSending.new(
+    result = DocumentProcessing::Sendings::CreateSending.new(
       extracted_document_id: ed.id,
       recipient_id: recipient.id,
       sent_at: Time.current,
@@ -53,7 +53,7 @@ class Sendings::CreateSendingTest < ActiveSupport::TestCase
   end
 
   test "fails with missing extracted_document_id" do
-    result = Sendings::CreateSending.new(
+    result = DocumentProcessing::Sendings::CreateSending.new(
       extracted_document_id: nil,
       recipient_id: 1,
       sent_at: Time.current
@@ -64,7 +64,7 @@ class Sendings::CreateSendingTest < ActiveSupport::TestCase
   end
 
   test "fails with missing recipient_id" do
-    result = Sendings::CreateSending.new(
+    result = DocumentProcessing::Sendings::CreateSending.new(
       extracted_document_id: 1,
       recipient_id: nil,
       sent_at: Time.current
@@ -76,11 +76,11 @@ class Sendings::CreateSendingTest < ActiveSupport::TestCase
 
   test "prefers explicit subject over template subject" do
     recipient = Employee.create!(name: "Luigi", email: "luigi@x.it", employee_code: "L1")
-    ud = UploadedDocument.create!(original_filename: "c.pdf", storage_path: "/tmp/c", page_count: 1, checksum: "ch22")
+    ud = UploadedDocument.create!(original_filename: "c.pdf", storage_path: "/tmp/c", page_count: 1, checksum: "ch22", file_kind: "pdf")
     ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
     template = Template.create!(subject: "Template Subject", body: "Body")
 
-    result = Sendings::CreateSending.new(
+    result = DocumentProcessing::Sendings::CreateSending.new(
       extracted_document_id: ed.id,
       recipient_id: recipient.id,
       sent_at: Time.current,

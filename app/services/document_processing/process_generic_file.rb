@@ -79,7 +79,7 @@ module DocumentProcessing
     end
 
     def process_csv(file_path, uploaded_document, run, overlays)
-      processor = DocumentProcessing::CSVProcessor.new
+      processor = DocumentProcessing::CsvProcessor.new
       extracted_rows = processor.extract_rows(file_path, container)
       events = []
 
@@ -112,7 +112,7 @@ module DocumentProcessing
             processed_at: Time.current,
             matched_employee: result[:employee]
           )
-          item.update!(status: "done", matched_employee: result[:employee])
+          item.update!(status: "done")
 
           events << build_success_payload(
             filename: uploaded_document.original_filename,
@@ -159,8 +159,7 @@ module DocumentProcessing
           sequence: 1,
           filename: uploaded_document.original_filename,
           status: "done",
-          extracted_document: extracted,
-          matched_employee: result[:employee]
+          extracted_document: extracted
         )
 
         run.update!(processed_documents: 1, status: "completed", completed_at: Time.current)

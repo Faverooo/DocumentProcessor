@@ -32,11 +32,20 @@ module DocumentProcessing
       end
 
       def mark_item_done!(item:, resolution:)
-        item&.update!(
-          status: "done",
-          matched_employee: resolution.matched? ? resolution.employee : nil,
-          error_message: nil
-        )
+        return unless item
+
+        item.with_lock do
+          item.reload
+          item.update!(status: "done", error_message: nil) unless item.done?
+
+          if resolution&.matched?
+            extracted = item.extracted_document
+            extracted&.with_lock do
+              extracted.reload
+              extracted.update!(matched_employee: resolution.employee)
+            end
+          end
+        end
       end
 
       def mark_item_failed(item:, error_message:)

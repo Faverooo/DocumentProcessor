@@ -6,7 +6,7 @@ class CsvProcessorTest < ActiveSupport::TestCase
     temp.write("recipient,amount\nMario Rossi,100\nGiulia Bianchi,200\n")
     temp.rewind
 
-    rows = DocumentProcessing::CSVProcessor.new.parse(temp.path)
+    rows = DocumentProcessing::CsvProcessor.new.parse(temp.path)
 
     assert_equal 2, rows.size
     assert_equal "Mario Rossi", rows[0]["recipient"]

@@ -1,7 +1,7 @@
 require "csv"
 
 module DocumentProcessing
-  class CSVProcessor
+  class CsvProcessor
     # Pure parser: no DB writes, no broadcast.
     def parse(file_path)
       text = File.read(file_path)
@@ -32,7 +32,7 @@ module DocumentProcessing
         resolution = container.recipient_resolver.resolve(recipient_names: recipient_names, raw_text: raw_text)
 
         {
-          ocr_text: raw_text,
+          ocr_text: nil,  # CSV records don't have OCR text (not scanned pages)
           metadata: metadata || raw_data,
           confidence: confidence || {},
           recipient: recipient,

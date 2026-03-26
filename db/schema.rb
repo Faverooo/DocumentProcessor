@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_24_123000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_26_093000) do
   create_table "employees", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email"
@@ -45,13 +45,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_123000) do
     t.text "error_message"
     t.integer "extracted_document_id"
     t.string "filename", null: false
-    t.integer "matched_employee_id"
     t.integer "processing_run_id", null: false
     t.integer "sequence", null: false
     t.string "status", default: "queued", null: false
     t.datetime "updated_at", null: false
     t.index ["extracted_document_id"], name: "index_processing_items_on_extracted_document_id"
-    t.index ["matched_employee_id"], name: "index_processing_items_on_matched_employee_id"
     t.index ["processing_run_id", "sequence"], name: "index_processing_items_on_processing_run_id_and_sequence", unique: true
     t.index ["processing_run_id"], name: "index_processing_items_on_processing_run_id"
     t.index ["status"], name: "index_processing_items_on_status"
@@ -100,6 +98,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_123000) do
     t.string "checksum"
     t.string "competence_period"
     t.datetime "created_at", null: false
+    t.string "file_kind"
     t.string "original_filename", null: false
     t.string "override_company"
     t.string "override_department"
@@ -107,11 +106,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_123000) do
     t.string "storage_path", null: false
     t.datetime "updated_at", null: false
     t.index ["checksum"], name: "index_uploaded_documents_on_checksum", unique: true
+    t.index ["file_kind"], name: "index_uploaded_documents_on_file_kind"
   end
 
   add_foreign_key "extracted_documents", "employees", column: "matched_employee_id"
   add_foreign_key "extracted_documents", "uploaded_documents"
-  add_foreign_key "processing_items", "employees", column: "matched_employee_id"
   add_foreign_key "processing_items", "extracted_documents"
   add_foreign_key "processing_items", "processing_runs"
   add_foreign_key "processing_runs", "uploaded_documents"

@@ -21,6 +21,7 @@ Rails.application.routes.draw do
   get "/documents/extracted/:id/pdf", to: "documents#extracted_pdf", as: :extracted_pdf_document
   patch "/documents/extracted/:id/reassign_range", to: "documents#reassign_range", as: :reassign_extracted_document_range
   patch "/documents/extracted/:id/metadata", to: "documents#update_metadata", as: :update_extracted_document_metadata
+  patch "/documents/extracted/:id/validate", to: "documents#validate_extracted", as: :validate_extracted_document
 
   # Lookups: aziende e utenti
   get "/lookups/companies", to: "lookups#companies", as: :lookups_companies

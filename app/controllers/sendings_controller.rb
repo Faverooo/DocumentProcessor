@@ -10,7 +10,7 @@ class SendingsController < ApplicationController
   def create
     sd_params = sending_params
     
-    result = Sendings::CreateSending.new(
+    result = DocumentProcessing::Sendings::CreateSending.new(
       extracted_document_id: sd_params[:extracted_document_id],
       recipient_id: sd_params[:recipient_id],
       sent_at: sd_params[:sent_at],

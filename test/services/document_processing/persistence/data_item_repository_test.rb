@@ -2,7 +2,7 @@ require "test_helper"
 
 class DocumentProcessing::Persistence::DataItemRepositoryTest < ActiveSupport::TestCase
   test "mark_extracted_document_done! acquires lock to prevent concurrent metadata updates" do
-    ud = UploadedDocument.create!(original_filename: "a.pdf", storage_path: "/tmp/a", page_count: 1, checksum: "ch_test_1")
+    ud = UploadedDocument.create!(original_filename: "a.pdf", storage_path: "/tmp/a", page_count: 1, checksum: "ch_test_1", file_kind: "pdf")
     ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
     run = ProcessingRun.create!(job_id: "job_123", total_documents: 1, original_filename: "test.pdf")
     
@@ -58,7 +58,7 @@ class DocumentProcessing::Persistence::DataItemRepositoryTest < ActiveSupport::T
   end
 
   test "concurrent mark_extracted_document_done! calls don't lose updates" do
-    ud = UploadedDocument.create!(original_filename: "b.pdf", storage_path: "/tmp/b", page_count: 1, checksum: "ch_test_2")
+    ud = UploadedDocument.create!(original_filename: "b.pdf", storage_path: "/tmp/b", page_count: 1, checksum: "ch_test_2", file_kind: "pdf")
     ed = ExtractedDocument.create!(uploaded_document: ud, sequence: 1, page_start: 1, page_end: 1)
     
     repo = DocumentProcessing::Persistence::DataItemRepository.new

@@ -7,7 +7,9 @@ class ExtractedDocument < ApplicationRecord
       queued: "queued",
       in_progress: "in_progress",
       done: "done",
-      failed: "failed"
+      failed: "failed",
+      sent: "sent",
+      validated: "validated"
     },
     validate: true
 
