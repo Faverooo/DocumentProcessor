@@ -168,12 +168,6 @@ Job Behavior:
 
 ### LEGACY (Test endpoints)
 
-POST /documents/test_data
-─────────────────────────
-⚠️ DEBUG ONLY — Process single PDF for data extraction without split
-Response: { status: "queued", message, job_id }
-
-
 ───────────────────────────────────────────────────────────────────────────────
 
 ### DOCUMENT LISTING & RETRIEVAL

@@ -5,13 +5,15 @@ module DocumentProcessing
       file_storage: nil,
       generic_file_repository: nil,
       image_processor_factory:,
-      csv_processor_factory:
+      csv_processor_factory:,
+      confidence_calculator_factory: nil
     )
       @notifier = notifier
       @file_storage = file_storage
       @generic_file_repository = generic_file_repository
       @image_processor_factory = image_processor_factory
       @csv_processor_factory = csv_processor_factory
+      @confidence_calculator_factory = confidence_calculator_factory
     end
 
     def call(file_path:, job_id:, uploaded_document_id:, file_kind:, category: nil, override_company: nil, override_department: nil, competence_period: nil)
@@ -124,8 +126,24 @@ module DocumentProcessing
     def process_image(file_path, uploaded_document, run, overlays)
       result = build_image_processor.extract(file_path)
 
+      # Compute global confidence merging LLM + Textract OCR lines when available
+      llm_confidence = result[:confidence] || {}
+      ocr_lines = result[:ocr_lines] || []
+
+      final_global_confidence = if confidence_calculator_factory
+        confidence_calculator_factory.call(
+          ocr_lines: ocr_lines,
+          recipient_names: Array(result[:recipient]),
+          metadata: result[:metadata],
+          llm_confidence: llm_confidence,
+          uploaded_document: uploaded_document
+        ).global_confidence
+      else
+        llm_confidence
+      end
+
       # Apply user overrides (user values + confidence = 1.0)
-      merged_metadata, merged_confidence = apply_user_overlays(result[:metadata], result[:confidence], overlays)
+      merged_metadata, merged_confidence = apply_user_overlays(result[:metadata], final_global_confidence, overlays)
 
       extracted = generic_file_repository.transaction do
         generic_file_repository.set_run_total!(run, 1)

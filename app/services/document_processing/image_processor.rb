@@ -10,6 +10,7 @@ module DocumentProcessing
     def extract(file_path)
       ocr_result = ocr_service.full_ocr(file_path)
       full_text = ocr_result[:text]
+      ocr_lines = ocr_result[:lines]
 
       extracted = data_extractor.extract(full_text)
       recipient_names = extracted[:recipients]
@@ -18,6 +19,7 @@ module DocumentProcessing
 
       {
         ocr_text: full_text,
+        ocr_lines: ocr_lines,
         metadata: extracted[:metadata],
         confidence: extracted[:llm_confidence],
         recipient: recipient,

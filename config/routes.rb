@@ -12,7 +12,7 @@ Rails.application.routes.draw do
   # Test servizi
   get "/documents/test", to: "documents#test", as: :test_documents
   post "/documents/split", to: "documents#split", as: :split_documents
-  post "/documents/test_data", to: "documents#test_data", as: :test_data_documents
+  # removed: post "/documents/test_data", to: "documents#test_data", as: :test_data_documents
   post "/documents/process_file", to: "documents#process_file", as: :process_file_documents
   get "/documents/uploads/:uploaded_document_id/extracted", to: "documents#extracted_index", as: :uploaded_document_extracted_documents
   get "/documents/uploads", to: "documents#uploads", as: :uploaded_documents

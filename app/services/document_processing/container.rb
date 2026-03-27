@@ -139,7 +139,8 @@ module DocumentProcessing
         file_storage: file_storage,
         generic_file_repository: data_item_repository,
         image_processor_factory: method(:image_processor),
-        csv_processor_factory: method(:csv_processor)
+        csv_processor_factory: method(:csv_processor),
+        confidence_calculator_factory: method(:confidence_calculator)
       )
     end
 
@@ -157,13 +158,6 @@ module DocumentProcessing
         upload_manager: upload_manager,
         generic_file_processing_job_class: GenericFileProcessingJob,
         file_storage: file_storage
-      )
-    end
-
-    def enqueue_single_data_extraction_command
-      DocumentProcessing::Commands::EnqueueSingleDataExtraction.new(
-        upload_manager: upload_manager,
-        data_extraction_job_class: DataExtractionJob
       )
     end
 

@@ -12,6 +12,7 @@ class DocumentsController < ApplicationController
       department: params[:department],
       competence_period: params[:competence_period]
     )
+
     if result.is_a?(Hash) && result[:ok] == false
       case result[:error]
       when :validation
@@ -33,28 +34,7 @@ class DocumentsController < ApplicationController
     render_error("Errore: #{e.message}")
   end
 
-  # POST /documents/test_data
-  def test_data
-    result = enqueue_single_data_extraction_command.call(file: params[:pdf])
-    if result.is_a?(Hash) && result[:ok] == false
-      case result[:error]
-      when :validation
-        return render_error(result[:message])
-      when :persistence
-        return render_error("Errore nel salvataggio del file")
-      else
-        return render_error("Errore: #{result[:message]}")
-      end
-    end
-
-    render json: {
-      status: result[:status] || "queued",
-      message: result[:message],
-      job_id: result[:job_id]
-    }
-  rescue StandardError => e
-    render_error("Errore: #{e.message}")
-  end
+  # POST /documents/test_data (removed)
 
   # GET /documents/uploads/:uploaded_document_id/extracted
   def extracted_index
@@ -275,9 +255,7 @@ class DocumentsController < ApplicationController
     document_processing_container.initialize_file_processing_command
   end
 
-  def enqueue_single_data_extraction_command
-    document_processing_container.enqueue_single_data_extraction_command
-  end
+
 
   def reassign_extracted_range_command
     document_processing_container.reassign_extracted_range_command

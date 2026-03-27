@@ -86,7 +86,6 @@ TemplatesController ..> Template
 "DocumentProcessing::Container" ..> "DocumentProcessing::ProcessGenericFile"
 "DocumentProcessing::Container" ..> "DocumentProcessing::Commands::InitializeProcessing"
 "DocumentProcessing::Container" ..> "DocumentProcessing::Commands::InitializeFileProcessing"
-"DocumentProcessing::Container" ..> "DocumentProcessing::Commands::EnqueueSingleDataExtraction"
 "DocumentProcessing::Container" ..> "DocumentProcessing::Commands::ReassignExtractedRange"
 
 ' Commands & persistence (show commands depend on models and, implicitly, container)
@@ -100,9 +99,7 @@ TemplatesController ..> Template
 "DocumentProcessing::Commands::InitializeFileProcessing" ..> GenericFileProcessingJob
 "DocumentProcessing::Commands::InitializeFileProcessing" ..> "DocumentProcessing::Persistence::FileStorage"
 
-"DocumentProcessing::Commands::EnqueueSingleDataExtraction" ..> ProcessingRun
-"DocumentProcessing::Commands::EnqueueSingleDataExtraction" ..> ProcessingItem
-"DocumentProcessing::Commands::EnqueueSingleDataExtraction" ..> DataExtractionJob
+ 
 
 "DocumentProcessing::Commands::ReassignExtractedRange" ..> "DocumentProcessing::PageRangePdf"
 "DocumentProcessing::Commands::ReassignExtractedRange" ..> DataExtractionJob
